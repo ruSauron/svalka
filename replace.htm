@@ -1,0 +1,166 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Найти и заменить</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            padding: 15px;
+            max-width: 600px;
+            margin: 0 auto;
+            background: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        textarea {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: monospace;
+            resize: vertical;
+        }
+        
+        .row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .row > div {
+            flex: 1;
+        }
+        
+        button {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 15px;
+        }
+        
+        .btn-replace {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .btn-replace:hover {
+            background: #45a049;
+        }
+        
+        .btn-repeat {
+            background: #2196F3;
+            color: white;
+        }
+        
+        .btn-repeat:hover {
+            background: #0b7dda;
+        }
+        
+        .btn-repeat:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        @media (max-width: 500px) {
+            body {
+                padding: 10px;
+            }
+            
+            .container {
+                padding: 15px;
+            }
+            
+            .row {
+                flex-direction: column;
+                gap: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <label for="text">Текст</label>
+        <textarea id="text" rows="4" placeholder="Введите текст для обработки"></textarea>
+        
+        <div class="row">
+            <div>
+                <label for="find">Что</label>
+                <textarea id="find" rows="2" placeholder="Что искать"></textarea>
+            </div>
+            <div>
+                <label for="replace">Чем</label>
+                <textarea id="replace" rows="2" placeholder="Чем заменить"></textarea>
+            </div>
+        </div>
+        
+        <button class="btn-replace" onclick="performReplace()">Заменить</button>
+        
+        <label for="result">Результат</label>
+        <textarea id="result" rows="4" placeholder="Результат появится здесь" readonly></textarea>
+        
+        <button class="btn-repeat" id="repeatBtn" onclick="repeatAction()" disabled>Повторить</button>
+    </div>
+
+    <script>
+        function performReplace() {
+            const text = document.getElementById('text').value;
+            const find = document.getElementById('find').value;
+            const replaceWith = document.getElementById('replace').value;
+            
+            if (!text) {
+                alert('Введите текст для обработки');
+                return;
+            }
+            
+            if (!find) {
+                alert('Введите, что нужно найти');
+                return;
+            }
+            
+            const result = text.split(find).join(replaceWith);
+            
+            document.getElementById('result').value = result;
+            document.getElementById('repeatBtn').disabled = false;
+        }
+        
+        function repeatAction() {
+            const result = document.getElementById('result').value;
+            
+            if (!result) {
+                return;
+            }
+            
+            document.getElementById('text').value = result;
+            document.getElementById('result').value = '';
+            document.getElementById('repeatBtn').disabled = true;
+        }
+    </script>
+</body>
+</html>

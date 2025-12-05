@@ -1,0 +1,150 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Генератор перестановок (Авто)</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+        }
+        .controls {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f0f0f0;
+            border: 1px solid #ccc;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        input {
+            width: 60px;
+            padding: 5px;
+        }
+        button {
+            padding: 6px 15px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        #count-display {
+            font-weight: bold;
+            color: #333;
+        }
+        textarea {
+            width: 100%;
+            height: 400px;
+            font-family: monospace;
+            tab-size: 4;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <label>Подач (N): 
+            <input type="number" id="n-val" value="2" min="1" oninput="generate()">
+        </label>
+        <label>Из образцов (M): 
+            <input type="number" id="m-val" value="5" min="1" oninput="generate()">
+        </label>
+
+        <button onclick="generate()">Сгенерировать</button>
+        <span id="count-display">Строк: 0</span>
+    </div>
+
+    <textarea id="output" placeholder="Результат..."></textarea>
+
+    <script>
+        const ALPHABET = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+        function getPermutations(pool, length) {
+            if (length === 0) return [""];
+            let results = [];
+            for (let i = 0; i < pool.length; i++) {
+                let current = pool[i];
+                let remaining = pool.slice(0, i).concat(pool.slice(i + 1));
+                let inner = getPermutations(remaining, length - 1);
+                for (let p of inner) {
+                    results.push(current + p);
+                }
+            }
+            return results;
+        }
+
+        function generate() {
+            const mInput = document.getElementById('m-val');
+            const nInput = document.getElementById('n-val');
+            const output = document.getElementById('output');
+            const countDisplay = document.getElementById('count-display');
+
+            const m = parseInt(mInput.value) || 0;
+            const n = parseInt(nInput.value) || 0;
+            
+            // Базовая валидация
+            if (m < 1 || n < 1) {
+                output.value = "";
+                countDisplay.textContent = "Строк: 0";
+                return;
+            }
+            if (n > m) {
+                output.value = "Ошибка: N не может быть больше M";
+                countDisplay.textContent = "Строк: 0";
+                return;
+            }
+            if (m > ALPHABET.length) {
+                output.value = "Ошибка: Слишком большое M";
+                countDisplay.textContent = "Строк: 0";
+                return;
+            }
+
+            const symbols = ALPHABET.slice(0, m).split('');
+            let matrix = [];
+
+            // 1. Генерация матрицы строк
+            for (let i = 0; i < m; i++) {
+                let firstChar = symbols[i];
+                
+                // Циклический сдвиг для формирования пула
+                let cyclicPool = [];
+                for (let k = 1; k <= m; k++) {
+                    let idx = (i + k) % m;
+                    cyclicPool.push(symbols[idx]);
+                }
+                let rowPool = cyclicPool.filter(c => c !== firstChar);
+
+                // Перестановки хвостов
+                let tails = getPermutations(rowPool, n - 1);
+                let rowItems = tails.map(tail => firstChar + tail);
+                matrix.push(rowItems);
+            }
+
+            // 2. Сборка по столбцам и форматирование
+            let resultLines = [];
+            let colCount = matrix[0].length; // Количество вариантов в одной "строке" (т.е. ширина матрицы)
+
+            for (let c = 0; c < colCount; c++) {
+                for (let r = 0; r < m; r++) {
+                    let rawVal = matrix[r][c];
+                    // P1 <tab> P2
+                    let formattedVal = rawVal.split('').map(char => "P" + char).join("\t");
+                    resultLines.push(formattedVal);
+                }
+            }
+
+            output.value = resultLines.join("\n");
+            countDisplay.textContent = "Строк: " + resultLines.length;
+        }
+
+        // Запуск при загрузке страницы
+        generate();
+    </script>
+</body>
+</html>

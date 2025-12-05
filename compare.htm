@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Сравнение строк</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        h1 {
+            font-family: Arial, sans-serif;
+            font-size: 24px;
+        }
+        .input-section {
+            margin: 20px 0;
+        }
+        textarea {
+            width: 100%;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            box-sizing: border-box;
+            margin: 5px 0;
+        }
+        button {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            background: #f0f0f0;
+            border-radius: 4px;
+            font-size: 14px;
+            margin: 10px 0;
+        }
+        button:hover {
+            background: #e0e0e0;
+        }
+        .result-section {
+            margin: 30px 0;
+        }
+        .string-label {
+            font-family: Arial, sans-serif;
+            font-weight: bold;
+            margin: 15px 0 5px 0;
+            font-size: 14px;
+        }
+        .comparison-line {
+            padding: 10px;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 5px 0;
+            word-wrap: break-word;
+            line-height: 1.8;
+        }
+        .char-same {
+            color: #666;
+        }
+        .char-diff {
+            background: #ffcccc;
+            color: #c00;
+            font-weight: bold;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        .char-code {
+            background: #fff3cd;
+            color: #856404;
+            font-size: 11px;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: monospace;
+            margin: 0 1px;
+        }
+        .stats {
+            font-family: Arial, sans-serif;
+            font-size: 13px;
+            color: #666;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Сравнение строк</h1>
+    
+    <div class="input-section">
+        <label>Строка 1 (можно ввести 2 строки для сравнения):</label>
+        <textarea id="string1" rows="3" placeholder="Введите первую строку..."></textarea>
+        
+        <label>Строка 2:</label>
+        <textarea id="string2" rows="3" placeholder="Введите вторую строку или оставьте пустым..."></textarea>
+        
+        <button onclick="compareStrings()">Сравнить</button>
+    </div>
+    
+    <div class="result-section" id="results" style="display: none;">
+        <div class="stats" id="stats"></div>
+        
+        <div class="string-label">Строка 1 (отличия выделены):</div>
+        <div class="comparison-line" id="result1"></div>
+        
+        <div class="string-label">Строка 2 (отличия выделены):</div>
+        <div class="comparison-line" id="result2"></div>
+    </div>
+
+    <script>
+        function isHtmlContent(str) {
+            // Проверяем, является ли строка HTML-документом
+            // Ищем типичные HTML-теги или структуру
+            if (!str || typeof str !== 'string') return false;
+            
+            const htmlPatterns = [
+                /<html/i,
+                /<body/i,
+                /<head/i,
+                /<!DOCTYPE/i,
+                /<!--StartFragment-->/,
+                /<!--EndFragment-->/
+            ];
+            
+            return htmlPatterns.some(pattern => pattern.test(str));
+        }
+        
+        function stripHtmlKeepText(html) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            
+            // Получаем текст, сохраняя все невидимые символы
+            let text = doc.body.textContent || '';
+            
+            // Проверяем, что исходная строка действительно была HTML
+            if (isHtmlContent(html)) {
+                // Убираем лишние переносы строк в начале (обычно 3)
+                let startTrimCount = 0;
+                for (let i = 0; i < text.length && text.charCodeAt(i) === 0x000A; i++) {
+                    startTrimCount++;
+                }
+                
+                // Убираем лишние переносы строк в конце (обычно 6)
+                let endTrimCount = 0;
+                for (let i = text.length - 1; i >= 0 && text.charCodeAt(i) === 0x000A; i--) {
+                    endTrimCount++;
+                }
+                
+                // Обрезаем переносы только если они есть
+                if (startTrimCount > 0 || endTrimCount > 0) {
+                    text = text.substring(startTrimCount, text.length - endTrimCount);
+                }
+            }
+            
+            return text;
+        }
+        
+        function setupPasteHandler(textarea) {
+            textarea.addEventListener('paste', function(e) {
+                e.preventDefault();
+                
+                let pastedText = '';
+                
+                if (e.clipboardData) {
+                    // Сначала пробуем получить HTML версию для сохранения невидимых символов
+                    const htmlData = e.clipboardData.getData('text/html');
+                    if (htmlData) {
+                        // HTML-контент - обрабатываем с удалением лишних переносов
+                        pastedText = stripHtmlKeepText(htmlData);
+                    } else {
+                        // Обычный текст - вставляем как есть, без обрезки
+                        pastedText = e.clipboardData.getData('text/plain');
+                    }
+                }
+                
+                const start = this.selectionStart;
+                const end = this.selectionEnd;
+                const currentValue = this.value;
+                
+                this.value = currentValue.substring(0, start) + pastedText + currentValue.substring(end);
+                this.selectionStart = this.selectionEnd = start + pastedText.length;
+                
+                // Генерируем событие input для обновления интерфейса
+                this.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+        }
+        
+        function isBasicChar(code) {
+            // Основная латиница и базовые символы
+            if (code >= 0x0020 && code <= 0x007E) return true;
+            
+            // Кириллица (основная + расширения)
+            if (code >= 0x0400 && code <= 0x04FF) return true;
+            if (code >= 0x0500 && code <= 0x052F) return true;
+            
+            // Латиница расширенная (европейские языки)
+            if (code >= 0x00C0 && code <= 0x00FF) return true;
+            if (code >= 0x0100 && code <= 0x017F) return true;
+            
+            return false;
+        }
+        
+        function shouldShowAsCode(char) {
+            const code = char.codePointAt(0);
+            
+            // Обычный пробел - оставляем как есть
+            if (code === 0x0020) return false;
+            
+            // Все остальные пробельные символы - показываем как код
+            if (code === 0x00A0 || code === 0x2000 || code === 0x2001 || 
+                code === 0x2002 || code === 0x2003 || code === 0x2004 ||
+                code === 0x2005 || code === 0x2006 || code === 0x2007 ||
+                code === 0x2008 || code === 0x2009 || code === 0x200A ||
+                code === 0x202F || code === 0x205F || code === 0x3000) return true;
+            
+            // Управляющие символы
+            if (code < 0x0020 || code === 0x7F) return true;
+            if (code >= 0x0080 && code <= 0x009F) return true;
+            
+            // Zero-width символы
+            if (code === 0x200B || code === 0x200C || code === 0x200D || 
+                code === 0xFEFF || code === 0x2060) return true;
+            
+            // Модификаторы эмодзи
+            if (code >= 0xFE00 && code <= 0xFE0F) return true;
+            if (code >= 0x1F3FB && code <= 0x1F3FF) return true;
+            
+            // Если символ не из базовых диапазонов - показываем как код
+            if (!isBasicChar(code)) return true;
+            
+            return false;
+        }
+        
+        function getCodeDisplay(code) {
+            const hexCode = code.toString(16).toUpperCase().padStart(4, '0');
+            return `U+${hexCode}`;
+        }
+        
+        function getGraphemes(str) {
+            // Используем Intl.Segmenter если доступен для правильного разбора составных символов
+            if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+                const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
+                return Array.from(segmenter.segment(str), s => s.segment);
+            }
+            
+            // Fallback: используем Array.from для базового разбора
+            return Array.from(str);
+        }
+        
+        function processGrapheme(grapheme, isDifferent) {
+            let html = '';
+            
+            // Если это многосимвольный графем (составной символ)
+            if (grapheme.length > 1) {
+                const codes = [];
+                for (const char of grapheme) {
+                    codes.push(getCodeDisplay(char.codePointAt(0)));
+                }
+                
+                const className = isDifferent ? 'char-diff char-code' : 'char-code';
+                html = `<span class="${className}">[${codes.join('+')}]</span>`;
+            } else {
+                // Одиночный символ
+                const code = grapheme.codePointAt(0);
+                
+                if (shouldShowAsCode(grapheme)) {
+                    const className = isDifferent ? 'char-diff char-code' : 'char-code';
+                    let display = getCodeDisplay(code);
+                    
+                    // Специальные имена для распространённых символов
+                    if (code === 0x00A0) display = 'NBSP';
+                    else if (code === 0x0009) display = 'TAB';
+                    else if (code === 0x000A) display = 'LF';
+                    else if (code === 0x000D) display = 'CR';
+                    else if (code === 0x200B) display = 'ZWSP';
+                    else if (code === 0x200C) display = 'ZWNJ';
+                    else if (code === 0x200D) display = 'ZWJ';
+                    else if (code === 0xFEFF) display = 'BOM';
+                    
+                    html = `<span class="${className}">[${display}]</span>`;
+                } else {
+                    const className = isDifferent ? 'char-diff' : 'char-same';
+                    // Показываем обычный пробел как ␣ для различия с NBSP
+                    const displayChar = grapheme === ' ' ? '␣' : grapheme;
+                    html = `<span class="${className}">${displayChar}</span>`;
+                }
+            }
+            
+            return html;
+        }
+        
+        function compareStrings() {
+            let str1 = document.getElementById('string1').value;
+            let str2 = document.getElementById('string2').value;
+            
+            // Если второе поле пустое, пробуем разделить первое на строки
+            if (!str2.trim() && str1.includes('\n')) {
+                const lines = str1.split('\n');
+                if (lines.length >= 2) {
+                    str1 = lines[0];
+                    str2 = lines[1];
+                }
+            }
+            
+            const graphemes1 = getGraphemes(str1);
+            const graphemes2 = getGraphemes(str2);
+            
+            const maxLen = Math.max(graphemes1.length, graphemes2.length);
+            let diffCount = 0;
+            
+            let html1 = '';
+            let html2 = '';
+            
+            for (let i = 0; i < maxLen; i++) {
+                const g1 = i < graphemes1.length ? graphemes1[i] : null;
+                const g2 = i < graphemes2.length ? graphemes2[i] : null;
+                
+                const same = g1 === g2;
+                if (!same) diffCount++;
+                
+                if (g1 !== null) {
+                    html1 += processGrapheme(g1, !same);
+                }
+                
+                if (g2 !== null) {
+                    html2 += processGrapheme(g2, !same);
+                }
+            }
+            
+            document.getElementById('result1').innerHTML = html1 || '<span style="color: #999;">Пустая строка</span>';
+            document.getElementById('result2').innerHTML = html2 || '<span style="color: #999;">Пустая строка</span>';
+            
+            const stats = `Длина строки 1: ${graphemes1.length} графем | Длина строки 2: ${graphemes2.length} графем | Различий: ${diffCount}`;
+            document.getElementById('stats').textContent = stats;
+            
+            document.getElementById('results').style.display = 'block';
+        }
+        
+        // Инициализация обработчиков вставки при загрузке страницы
+        window.addEventListener('DOMContentLoaded', function() {
+            setupPasteHandler(document.getElementById('string1'));
+            setupPasteHandler(document.getElementById('string2'));
+        });
+    </script>
+</body>
+</html>

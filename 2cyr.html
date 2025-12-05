@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Конвертер раскладки EN <> RU</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        textarea {
+            width: 100%;
+            height: 100px;
+            margin: 10px 0;
+            padding: 10px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        .buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 10px 0;
+        }
+        button {
+            padding: 10px 15px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            background: #f0f0f0;
+            border-radius: 4px;
+        }
+        button:hover {
+            background: #e0e0e0;
+        }
+        #log {
+            margin: 10px 0;
+            padding: 10px;
+            min-height: 30px;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #333;
+        }
+        .log-success {
+            color: #2d7d2d;
+        }
+        .log-error {
+            color: #c7254e;
+        }
+        .log-warning {
+            color: #d97e00;
+        }
+        .log-line {
+            margin: 2px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="top">Исправление раскладки:</div>
+    <textarea id="input" placeholder="Введите текст..."></textarea>
+    
+    <div class="buttons">
+        <button onclick="autoConvert()">Авто</button>
+        <button onclick="convertLayout('enToRu')">Поменять EN→RU</button>
+        <button onclick="convertLayout('ruToEn')">Поменять RU→EN</button>
+        <button onclick="copyResult()">Скопировать</button>
+    </div>
+     
+    <textarea id="output" placeholder="Результат..." readonly></textarea>
+
+    <div id="log"></div>
+
+    <script>
+        const EN = 'qwertyuiop[]asdfghjkl;\'zxcvbnm,./QWERTYUIOP{}ASDFGHJKL:"ZXCVBNM<>?!@#$%^&*()_+|';
+        const RU = 'йцукенгшщзхъфывапролджэячсмитьбю.ЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭЯЧСМИТЬБЮ,!"№;%:?*()_+/';
+
+        function log(message, type = 'info') {
+            const logElem = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            const className = type === 'success' ? 'log-success' : type === 'error' ? 'log-error' : type === 'warning' ? 'log-warning' : '';
+            const newLine = `<div class="log-line"><span class="${className}">[${time}] ${message}</span></div>`;
+            logElem.innerHTML = newLine + logElem.innerHTML;
+        }
+
+        function detectLanguage(text) {
+            let enCount = 0;
+            let ruCount = 0;
+            
+            for (let i = 0; i < text.length; i++) {
+                const char = text[i];
+                if (EN.indexOf(char) !== -1) enCount++;
+                if (RU.indexOf(char) !== -1) ruCount++;
+            }
+            
+            // Если не смогли определить или равное количество - по умолчанию EN
+            return enCount >= ruCount ? 'en' : 'ru';
+        }
+
+        async function autoConvert() {
+            let text = '';
+            let pasteSuccess = false;
+            
+            // Шаг 1: Попытка вставить из буфера
+            try {
+                text = await navigator.clipboard.readText();
+                document.getElementById('input').value = text;
+                pasteSuccess = true;
+            } catch (err) {
+                // Если не получилось - берём из поля ввода
+                text = document.getElementById('input').value;
+                if (text) {
+                    log('Не удалось вставить из буфера, используется текст из поля', 'warning');
+                } else {
+                    log('Поле ввода пустое. Вставьте текст вручную', 'error');
+                    return;
+                }
+            }
+            
+            // Шаг 2: Определение языка (с резервным вариантом EN→RU)
+            let direction = 'enToRu';
+            try {
+                const detectedLang = detectLanguage(text);
+                direction = detectedLang === 'en' ? 'enToRu' : 'ruToEn';
+            } catch (err) {
+                log('Не удалось определить язык, используется EN→RU', 'warning');
+            }
+            
+            // Шаг 3: Конвертация
+            const from = direction === 'enToRu' ? EN : RU;
+            const to = direction === 'enToRu' ? RU : EN;
+            
+            let result = '';
+            for (let char of text) {
+                const index = from.indexOf(char);
+                result += index !== -1 ? to[index] : char;
+            }
+            
+            document.getElementById('output').value = result;
+            
+            // Шаг 4: Попытка скопировать результат
+            let copySuccess = false;
+            try {
+                await navigator.clipboard.writeText(result);
+                copySuccess = true;
+            } catch (err) {
+                log('Не удалось скопировать автоматически. Используйте кнопку "Скопировать"', 'warning');
+            }
+            
+            // Шаг 5: Итоговое сообщение в лог
+            const directionText = direction === 'enToRu' ? 'EN→RU' : 'RU→EN';
+            const parts = [];
+            
+            if (pasteSuccess) parts.push('вставлен');
+            parts.push(`конвертирован ${directionText}`);
+            if (copySuccess) parts.push('скопирован');
+            
+            log(`Авто: ${parts.join(', ')}`, 'success');
+        }
+
+        function convertLayout(direction) {
+            const input = document.getElementById('input').value;
+            const from = direction === 'enToRu' ? EN : RU;
+            const to = direction === 'enToRu' ? RU : EN;
+            
+            let result = '';
+            for (let char of input) {
+                const index = from.indexOf(char);
+                result += index !== -1 ? to[index] : char;
+            }
+            
+            document.getElementById('output').value = result;
+            const directionText = direction === 'enToRu' ? 'EN→RU' : 'RU→EN';
+            log(`Раскладка изменена: ${directionText}`, 'success');
+        }
+
+        function copyResult() {
+            const output = document.getElementById('output');
+            
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(output.value)
+                    .then(() => {
+                        log('Текст скопирован в буфер обмена!', 'success');
+                    })
+                    .catch(err => {
+                        fallbackCopy(output);
+                    });
+            } else {
+                fallbackCopy(output);
+            }
+        }
+
+        function fallbackCopy(textarea) {
+            try {
+                textarea.select();
+                textarea.setSelectionRange(0, 99999);
+                
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    log('Текст скопирован в буфер обмена!', 'success');
+                } else {
+                    log('Не удалось скопировать. Используйте Ctrl+C', 'error');
+                }
+            } catch (err) {
+                log('Не удалось скопировать. Используйте Ctrl+C', 'error');
+            }
+        }
+    </script>
+</body>
+</html>
