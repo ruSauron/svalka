@@ -1,4 +1,5 @@
-﻿<!DOCTYPE html>
+
+<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
@@ -55,12 +56,17 @@
             font-size: 16px;
             cursor: pointer;
             transition: background 0.3s;
+            width: 100%;
         }
         button:hover {
             background: #45a049;
         }
         button:active {
             background: #3d8b40;
+        }
+        button.error {
+            background: #f44336;
+            cursor: default;
         }
         .btn-row {
             display: flex;
@@ -86,7 +92,7 @@
         <textarea id="input" rows="5" placeholder="Вставьте текст со ссылкой или ссылку..."></textarea>
         
         <div class="btn-row">
-            <button onclick="processLink()">Обработать</button>
+            <button id="processBtn" onclick="processLink()">Вставить и обработать</button>
         </div>
         
         <label for="output" style="margin-top: 5px;">Результат:</label>
@@ -98,37 +104,33 @@
     </div>
 
     <script>
-        function processLink() {
-            const input = document.getElementById('input').value;
-            const output = document.getElementById('output');
+        function isYouTubeUrl(url) {
+            return /(?:youtube\.com|youtu\.be)/i.test(url);
+        }
+        
+        function extractYouTubeId(url) {
+            const patterns = [
+                /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/,
+                /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
+                /youtube\.com\/v\/([a-zA-Z0-9_-]{11})/,
+                /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
+                /youtube\.com\/watch\?.*v=([a-zA-Z0-9_-]{11})/
+            ];
             
+            for (let pattern of patterns) {
+                const match = url.match(pattern);
+                if (match && match[1]) {
+                    return match[1];
+                }
+            }
+            return null;
+        }
+        
+        function processText(text) {
             const urlRegex = /https?:\/\/[^\s]+/g;
-            const urls = input.match(urlRegex);
+            const urls = text.match(urlRegex);
             
             if (!urls || urls.length === 0) {
-                output.value = '';
-                return;
-            }
-            
-            function isYouTubeUrl(url) {
-                return /(?:youtube\.com|youtu\.be)/i.test(url);
-            }
-            
-            function extractYouTubeId(url) {
-                const patterns = [
-                    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/,
-                    /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
-                    /youtube\.com\/v\/([a-zA-Z0-9_-]{11})/,
-                    /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
-                    /youtube\.com\/watch\?.*v=([a-zA-Z0-9_-]{11})/
-                ];
-                
-                for (let pattern of patterns) {
-                    const match = url.match(pattern);
-                    if (match && match[1]) {
-                        return match[1];
-                    }
-                }
                 return null;
             }
             
@@ -152,7 +154,108 @@
                 resultUrl = urls[0];
             }
             
-            output.value = resultUrl;
+            return resultUrl;
+        }
+        
+        function hasYouTubeLink(text) {
+            const urlRegex = /https?:\/\/[^\s]+/g;
+            const urls = text.match(urlRegex);
+            
+            if (!urls) return false;
+            
+            for (let url of urls) {
+                if (isYouTubeUrl(url)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        function showError(message) {
+            const btn = document.getElementById('processBtn');
+            const originalText = btn.textContent;
+            const originalClass = btn.className;
+            
+            btn.textContent = message;
+            btn.classList.add('error');
+            btn.onclick = null;
+            
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.className = originalClass;
+                btn.onclick = processLink;
+            }, 2000);
+        }
+        
+        async function getClipboardText() {
+            // Пробуем современный API
+            if (navigator.clipboard && navigator.clipboard.readText) {
+                try {
+                    return await navigator.clipboard.readText();
+                } catch (e) {
+                    // Если не удалось, пробуем старый способ
+                }
+            }
+            
+            // Старый способ через временное поле
+            const tempInput = document.createElement('textarea');
+            tempInput.style.position = 'absolute';
+            tempInput.style.left = '-9999px';
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            
+            let clipboardText = '';
+            if (document.execCommand('paste')) {
+                clipboardText = tempInput.value;
+            }
+            
+            document.body.removeChild(tempInput);
+            return clipboardText;
+        }
+        
+        async function processLink() {
+            const inputField = document.getElementById('input');
+            const outputField = document.getElementById('output');
+            const inputText = inputField.value.trim();
+            
+            // Шаг 1-2: Если в верхнем поле есть текст, пробуем обработать
+            if (inputText) {
+                const processed = processText(inputText);
+                
+                // Если обработка дала результат и он отличается от нижнего поля
+                if (processed && processed !== outputField.value) {
+                    outputField.value = processed;
+                    return;
+                }
+                
+                // Если результат совпадает с нижним полем или нет ссылки в верхнем поле
+                // переходим к обработке буфера
+            }
+            
+            // Шаг 3-8: Попробовать вставить и обработать из буфера
+            try {
+                const clipboardText = await getClipboardText();
+                
+                if (!clipboardText) {
+                    showError('Ссылка не обнаружена');
+                    return;
+                }
+                
+                const processed = processText(clipboardText);
+                
+                // Проверяем, есть ли YouTube ссылка в буфере
+                if (!hasYouTubeLink(clipboardText)) {
+                    showError('Ссылка не обнаружена');
+                    return;
+                }
+                
+                // Шаг 4: Заменить оба поля
+                inputField.value = clipboardText;
+                outputField.value = processed || '';
+                
+            } catch (e) {
+                showError('Ссылка не обнаружена');
+            }
         }
 
         async function copyResult() {
