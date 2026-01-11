@@ -17,3 +17,5 @@
 [Старая телеигра](tvgame.htm)
 
 [Запустить html без создания файла](run.htm)
+
+[TOTP / Google Authenticator](totp.htm)
