@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MikroTik Config Fixer</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eceff1; padding: 20px; color: #333; }
+        .container { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+        .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .panel { display: flex; flex-direction: column; gap: 8px; }
+        h1 { font-size: 20px; margin-bottom: 10px; color: #455a64; }
+        h3 { font-size: 14px; color: #607d8b; text-transform: uppercase; letter-spacing: 0.5px; }
+        textarea { width: 100%; height: 500px; padding: 12px; border: 1px solid #cfd8dc; border-radius: 4px; font-family: 'Consolas', 'Monaco', monospace; font-size: 13px; line-height: 1.5; background: #fff; resize: none; }
+        #input { height: 600px; }
+        .outputs { display: flex; flex-direction: column; gap: 20px; }
+        .output-box { height: 302px; }
+        button { padding: 12px; background: #2196f3; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 16px; transition: background 0.2s; }
+        button:hover { background: #1976d2; }
+        .error { color: #d32f2f; font-size: 12px; display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>MikroTik Config Processor</h1>
+        <div class="panels">
+            <div class="panel">
+                <h3>Ввод (RSC / Скрипт)</h3>
+                <textarea id="input" placeholder="Paste your config...">
+# place /export .rsc here
+/interface list
+set [ find name=all ] comment="contains all interfaces" exclude="" include="" \
+    name=all
+set [ find name=none ] comment="contains no interfaces" exclude="" include="" \
+    name=none
+                </textarea>
+                <button onclick="process()">Process</button>
+            </div>
+            <div class="outputs">
+                <div class="panel">
+                    <h3>1. Однострочный вид</h3>
+                    <textarea id="output1" class="output-box" readonly></textarea>
+                </div>
+                <div class="panel">
+                    <h3>2. Группировка по разделам</h3>
+                    <textarea id="output2" class="output-box" readonly></textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function process() {
+            const rawInput = document.getElementById('input').value;
+
+            // --- Phase 1: Handle Multi-line continuations (Backslashes) ---
+            const lines = rawInput.split(/\r?\n/);
+            const joinedLines = [];
+            let buffer = "";
+
+            for (let i = 0; i < lines.length; i++) {
+                let line = lines[i];
+                let hasContinuation = line.trim().endsWith('\\');
+
+                if (hasContinuation) {
+                    buffer += line.trim().slice(0, -1);
+                } else {
+                    buffer += line.trim();
+                    joinedLines.push(buffer);
+                    buffer = "";
+                }
+            }
+            if (buffer) joinedLines.push(buffer);
+
+            // --- Phase 2: Apply context prefixes and preserve comments ---
+            const processedItems = []; // Array of { comments: [], command: string, section: string }
+            let currentSection = "";
+            let pendingComments = [];
+
+            for (let line of joinedLines) {
+                if (!line) continue;
+
+                if (line.startsWith('#')) {
+                    pendingComments.push(line);
+                    continue;
+                }
+
+                if (line.startsWith('/')) {
+                    // It's a header or a full command
+                    // Check if it has a verb like set/add/remove/print after the path
+                    const parts = line.split(/\s+/);
+                    const verbs = ['set', 'add', 'remove', 'print', 'find', 'edit', 'export', 'enable', 'disable'];
+
+                    let hasVerb = parts.some(p => verbs.includes(p.toLowerCase()));
+
+                    if (hasVerb) {
+                        // It's a complete command starting with /
+                        // Extract section from command (everything before first verb)
+                        let sectionParts = [];
+                        for(let p of parts) {
+                            if (verbs.includes(p.toLowerCase())) break;
+                            sectionParts.push(p);
+                        }
+                        currentSection = sectionParts.join(" ");
+
+                        processedItems.push({
+                            comments: [...pendingComments],
+                            command: line,
+                            section: currentSection
+                        });
+                        pendingComments = [];
+                    } else {
+                        // It's just a section header
+                        currentSection = line;
+                    }
+                } else {
+                    // It's a sub-command (set/add) that needs a prefix
+                    if (currentSection) {
+                        processedItems.push({
+                            comments: [...pendingComments],
+                            command: currentSection + " " + line,
+                            section: currentSection
+                        });
+                        pendingComments = [];
+                    } else {
+                        // Floating command without section
+                        processedItems.push({
+                            comments: [...pendingComments],
+                            command: line,
+                            section: "root"
+                        });
+                        pendingComments = [];
+                    }
+                }
+            }
+
+            // Output 1: Simple combined view
+            const out1 = processedItems.map(item => {
+                let res = "";
+                if (item.comments.length > 0) res += item.comments.join("\n") + "\n";
+                res += item.command;
+                return res;
+            }).join("\n\n");
+            document.getElementById('output1').value = out1;
+
+            // Output 2: Grouped view
+            // Requirement: Group by root section (e.g. /interface) 
+            // but keep relative order of appearance for the sections.
+            const groups = new Map();
+            const sectionOrder = [];
+
+            for (const item of processedItems) {
+                // Determine group key (e.g., "/interface" from "/interface bridge filter")
+                const rootSection = item.section.split(" ")[0];
+
+                if (!groups.has(rootSection)) {
+                    groups.set(rootSection, []);
+                    sectionOrder.push(rootSection);
+                }
+                groups.get(rootSection).push(item);
+            }
+
+            let out2 = "";
+            for (const root of sectionOrder) {
+                const items = groups.get(root);
+                items.forEach(item => {
+                    if (item.comments.length > 0) out2 += item.comments.join("\n") + "\n";
+                    out2 += item.command + "\n";
+                });
+                out2 += "\n";
+            }
+            document.getElementById('output2').value = out2.trim();
+        }
+    </script>
+</body>
+</html>
