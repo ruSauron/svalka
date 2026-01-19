@@ -19,3 +19,5 @@
 [Запустить html без создания файла](run.htm)
 
 [TOTP / Google Authenticator](totp.htm)
+
+[Mikrotik в одну строку](mikrotik-line.htm)
