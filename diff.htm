@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Git Diff Tool (Vanilla JS)</title>
+    <style>
+        :root {
+            --bg-color: #f4f4f9;
+            --panel-bg: #ffffff;
+            --border-color: #ccc;
+            --text-color: #333;
+            --line-num-bg: #eee;
+            --line-num-text: #888;
+            --success-color: #e6ffec;
+            --error-color: #ffe6e6;
+            --diff-add-bg: #d4fcd4; /* Светло-зеленый для добавления */
+            --diff-del-bg: #fcd4d4; /* Светло-красный для удаления */
+            --btn-primary: #007bff;
+            --btn-hover: #0056b3;
+            --font-code: 'Consolas', 'Monaco', 'Courier New', monospace;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 10px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 10px;
+            flex-shrink: 0;
+        }
+
+        h1 { margin: 0; font-size: 1.2rem; color: #444; }
+        p { margin: 5px 0 0; font-size: 0.9rem; color: #666; }
+
+        /* Основной контейнер */
+        .main-container {
+            display: flex;
+            flex: 1;
+            gap: 10px;
+            min-height: 0; /* Важно для скролла внутри флекс элементов */
+        }
+
+        /* Колонки */
+        .column {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            overflow: hidden;
+            min-width: 0;
+        }
+
+        .column-header {
+            padding: 8px;
+            background: #e9ecef;
+            border-bottom: 1px solid var(--border-color);
+            font-weight: bold;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        /* Область редактора с номерами строк */
+        .editor-wrapper {
+            position: relative;
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .line-numbers {
+            width: 40px;
+            background: var(--line-num-bg);
+            color: var(--line-num-text);
+            text-align: right;
+            padding: 10px 5px;
+            font-family: var(--font-code);
+            font-size: 14px;
+            line-height: 20px; /* Фиксированная высота строки */
+            user-select: none;
+            overflow: hidden;
+            border-right: 1px solid var(--border-color);
+        }
+
+        textarea, .result-view {
+            flex: 1;
+            border: none;
+            resize: none;
+            padding: 10px;
+            font-family: var(--font-code);
+            font-size: 14px;
+            line-height: 20px; /* Должно совпадать с line-numbers */
+            white-space: pre;
+            overflow: auto;
+            outline: none;
+            background: transparent;
+            color: var(--text-color);
+            tab-size: 4;
+        }
+
+        /* Стилизация результата (div вместо textarea для раскраски) */
+        .result-view {
+            margin: 0;
+            padding: 0; /* Padding управляется внутренними строками */
+        }
+        
+        .result-line {
+            padding: 0 10px;
+            min-height: 20px;
+        }
+
+        /* Цвета diff */
+        .diff-added { background-color: var(--diff-add-bg); }
+        .diff-removed { background-color: var(--diff-del-bg); }
+        .diff-header { color: #888; font-style: italic; }
+        .error-line { background-color: #ffcccc; border: 1px solid red; font-weight: bold; }
+        .error-msg { color: red; padding: 10px; font-weight: bold; background: #fff0f0; border-bottom: 1px solid red; }
+
+        /* Панель управления */
+        .controls {
+            padding: 10px;
+            background: #f8f9fa;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        button {
+            padding: 8px 12px;
+            font-size: 0.9rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-weight: bold;
+            color: white;
+        }
+
+        .btn-apply { background-color: #28a745; }
+        .btn-apply:hover { background-color: #218838; }
+
+        .btn-make { background-color: #007bff; }
+        .btn-make:hover { background-color: #0069d9; }
+
+        /* Адаптивность */
+        @media (max-width: 768px) {
+            .main-container {
+                flex-direction: column;
+                height: auto;
+            }
+            body {
+                height: auto;
+                overflow-y: auto;
+            }
+            .column {
+                height: 300px; /* Фиксированная высота на мобильных */
+            }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Git Diff Helper</h1>
+</header>
+
+<div class="main-container">
+    <!-- Зона 1: Оригинал -->
+    <div class="column">
+        <div class="column-header">Оригинальный код (Original)</div>
+        <div class="editor-wrapper">
+            <div class="line-numbers" id="ln-orig">1</div>
+            <textarea id="input-orig" placeholder="Вставьте сюда исходный код..." spellcheck="false"></textarea>
+        </div>
+    </div>
+
+    <!-- Зона 2: Diff / Измененный -->
+    <div class="column">
+        <div class="column-header">Diff (Патч) или Измененный код</div>
+        <div class="editor-wrapper">
+            <div class="line-numbers" id="ln-diff">1</div>
+            <textarea id="input-diff" placeholder="Вставьте Diff для применения ИЛИ измененный код для создания Diff..." spellcheck="false"></textarea>
+        </div>
+        <div class="controls">
+            <button class="btn-apply" onclick="applyDiff()">Apply DIFF (Применить)</button>
+            <button class="btn-make" onclick="makeDiff()">Make DIFF (Создать)</button>
+        </div>
+    </div>
+
+    <!-- Зона 3: Результат -->
+    <div class="column">
+        <div class="column-header">Результат (Result)</div>
+        <div class="editor-wrapper">
+            <div class="line-numbers" id="ln-res">1</div>
+            <!-- Используем div для возможности раскраски строк -->
+            <div id="output-res" class="result-view"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- Управление UI (Нумерация строк и скролл) ---
+
+    function setupEditor(textareaId, lineNumId) {
+        const textarea = document.getElementById(textareaId);
+        const lineNums = document.getElementById(lineNumId);
+
+        const updateLineNumbers = () => {
+            const lines = textarea.value.split('\n').length;
+            lineNums.innerHTML = Array(lines).fill(0).map((_, i) => i + 1).join('<br>');
+        };
+
+        const syncScroll = () => {
+            lineNums.scrollTop = textarea.scrollTop;
+        };
+
+        textarea.addEventListener('input', updateLineNumbers);
+        textarea.addEventListener('scroll', syncScroll);
+        
+        // Инициализация
+        updateLineNumbers();
+    }
+
+    // Для div результата нужна особая логика, так как это не textarea
+    const resultDiv = document.getElementById('output-res');
+    const resultLn = document.getElementById('ln-res');
+
+    resultDiv.addEventListener('scroll', () => {
+        resultLn.scrollTop = resultDiv.scrollTop;
+    });
+
+    setupEditor('input-orig', 'ln-orig');
+    setupEditor('input-diff', 'ln-diff');
+
+
+    // --- Основная логика ---
+
+    function getLines(id) {
+        return document.getElementById(id).value.split('\n');
+    }
+
+    function setResultContent(htmlContent, lineCount) {
+        resultDiv.innerHTML = htmlContent;
+        resultLn.innerHTML = Array(lineCount).fill(0).map((_, i) => i + 1).join('<br>');
+    }
+
+    // --- Логика Make DIFF (Создание патча) ---
+    // Использует упрощенный LCS алгоритм для сравнения
+
+    function makeDiff() {
+        const originalLines = getLines('input-orig');
+        const modifiedLines = getLines('input-diff');
+        
+        const diff = computeDiff(originalLines, modifiedLines);
+        
+        // Формируем Unified Diff формат
+        let diffText = "--- Original\n+++ Modified\n";
+        
+        // Простая генерация одного большого чанка (hunk) для простоты отображения
+        // В реальном git diff чанки разбиваются, но для просмотра изменений тут достаточно сплошного вывода
+        if (diff.length > 0) {
+            diffText += `@@ -1,${originalLines.length} +1,${modifiedLines.length} @@\n`;
+            diff.forEach(part => {
+                const prefix = part.added ? '+' : (part.removed ? '-' : ' ');
+                diffText += prefix + part.value + "\n";
+            });
+        } else {
+             // Если изменений нет, просто выводим контекст (но алгоритм должен вернуть строки)
+             // Если алгоритм вернул пустой массив, значит файлы пустые? 
+             // В нашей реализации LCS вернет общий текст как "common".
+        }
+
+        // Вывод в правое окно (Результат) с подсветкой
+        renderDiffToResult(diffText);
+    }
+
+    // Алгоритм LCS (Longest Common Subsequence) O(N*M) - подходит для небольших и средних файлов
+    function computeDiff(oldLines, newLines) {
+        const dp = Array(oldLines.length + 1).fill(null).map(() => Array(newLines.length + 1).fill(0));
+
+        for (let i = 1; i <= oldLines.length; i++) {
+            for (let j = 1; j <= newLines.length; j++) {
+                if (oldLines[i - 1] === newLines[j - 1]) {
+                    dp[i][j] = dp[i - 1][j - 1] + 1;
+                } else {
+                    dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+                }
+            }
+        }
+
+        let i = oldLines.length;
+        let j = newLines.length;
+        const diff = [];
+
+        while (i > 0 || j > 0) {
+            if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+                diff.unshift({ value: oldLines[i - 1], added: false, removed: false });
+                i--; j--;
+            } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+                diff.unshift({ value: newLines[j - 1], added: true, removed: false });
+                j--;
+            } else if (i > 0 && (j === 0 || dp[i][j - 1] < dp[i - 1][j])) {
+                diff.unshift({ value: oldLines[i - 1], added: false, removed: true });
+                i--;
+            }
+        }
+        return diff;
+    }
+
+    // --- Логика Apply DIFF (Применение патча) ---
+
+    function applyDiff() {
+        const originalText = document.getElementById('input-orig').value;
+        const diffText = document.getElementById('input-diff').value;
+        const originalLines = originalText.split('\n');
+        
+        // Парсинг
+        const lines = diffText.split('\n');
+        let resultLines = [];
+        let origIndex = 0; // Курсор в оригинальном файле (0-based)
+        let hasErrors = false;
+        let errorHtml = "";
+
+        // Пропускаем заголовки diff (---, +++)
+        let i = 0;
+        while(i < lines.length && (lines[i].startsWith('---') || lines[i].startsWith('+++'))) {
+            i++;
+        }
+
+        try {
+            while (i < lines.length) {
+                const line = lines[i];
+                
+                // Парсим заголовок чанка: @@ -oldStart,oldLen +newStart,newLen @@
+                if (line.startsWith('@@')) {
+                    const match = /@@ \-(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line);
+                    if (!match) {
+                        throw new Error(`Неверный формат заголовка hunk: ${line}`);
+                    }
+                    
+                    const hunkOldStart = parseInt(match[1]) - 1; // 0-based
+                    
+                    // Добавляем строки из оригинала, которые идут ДО этого чанка
+                    while (origIndex < hunkOldStart) {
+                        resultLines.push({ type: 'ctx', text: originalLines[origIndex] });
+                        origIndex++;
+                    }
+                    
+                    i++; // Переходим к следующей строке после @@
+                    continue;
+                }
+
+                // Обработка содержимого чанка
+                if (line.length === 0) { i++; continue; }
+
+                const type = line[0];
+                const content = line.substring(1);
+
+                if (type === ' ') {
+                    // Контекстная строка - должна совпадать с оригиналом
+                    if (origIndex >= originalLines.length) {
+                        throw new Error(`Diff ожидает строку "${content}", но оригинал закончился (Line ${i+1})`);
+                    }
+                    if (originalLines[origIndex] !== content) {
+                        throw new Error(`Несовпадение контекста!\nОжидалось (в Diff): "${content}"\nНайдено (в Orig): "${originalLines[origIndex]}"\nСтрока Diff #${i+1}`);
+                    }
+                    resultLines.push({ type: 'ctx', text: content });
+                    origIndex++;
+                } else if (type === '-') {
+                    // Удаление - строка должна совпадать с оригиналом, чтобы её удалить
+                    if (origIndex >= originalLines.length) {
+                         throw new Error(`Diff пытается удалить "${content}", но оригинал закончился (Line ${i+1})`);
+                    }
+                    if (originalLines[origIndex] !== content) {
+                         throw new Error(`Ошибка удаления!\nDiff хочет удалить: "${content}"\nВ оригинале строка: "${originalLines[origIndex]}"\nСтрока Diff #${i+1}`);
+                    }
+                    // Мы не добавляем её в resultLines, так как она удалена, но сдвигаем курсор оригинала
+                    origIndex++; 
+                } else if (type === '+') {
+                    // Добавление - просто вставляем
+                    resultLines.push({ type: 'add', text: content });
+                    // Курсор оригинала НЕ сдвигаем
+                } else if (type === '\\') {
+                    // \ No newline at end of file - игнорируем для простоты
+                } else {
+                    // Неизвестный префикс, возможно это просто конец diff или мусор
+                }
+                i++;
+            }
+            
+            // Дописываем остаток оригинального файла
+            while (origIndex < originalLines.length) {
+                resultLines.push({ type: 'ctx', text: originalLines[origIndex] });
+                origIndex++;
+            }
+
+            renderResult(resultLines);
+
+        } catch (e) {
+            renderError(e.message, lines[i]);
+        }
+    }
+
+    // --- Рендеринг ---
+
+    function renderDiffToResult(diffText) {
+        // Рендерим diff как цветной текст в правом окне
+        const lines = diffText.split('\n');
+        let html = '';
+        lines.forEach(line => {
+            let className = 'result-line';
+            if (line.startsWith('+') && !line.startsWith('+++')) className += ' diff-added';
+            else if (line.startsWith('-') && !line.startsWith('---')) className += ' diff-removed';
+            else if (line.startsWith('@@')) className += ' diff-header';
+            
+            // Экранирование HTML
+            const safeContent = line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            html += `<div class="${className}">${safeContent || '&nbsp;'}</div>`;
+        });
+        setResultContent(html, lines.length);
+    }
+
+    function renderResult(resultLines) {
+        // Рендерим итоговый "Applied" файл. 
+        // Если это результат применения diff, можно просто показать текст,
+        // но лучше показать добавленные строки зеленым (опционально), но обычно результат Apply - это просто код.
+        // Здесь я просто выведу чистый код.
+        
+        let html = '';
+        resultLines.forEach(item => {
+             // Можно подсветить item.type === 'add' зеленым, чтобы показать, что было вставлено,
+             // но обычно "Result" - это чистый файл. Сделаем без цвета для чистоты, 
+             // или можно сделать легкий оттенок.
+             let className = 'result-line';
+             if (item.type === 'add') className += ' diff-added'; // Легкая подсветка того, что пришло из diff
+             
+             const safeContent = item.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+             html += `<div class="${className}">${safeContent || '&nbsp;'}</div>`;
+        });
+        
+        setResultContent(html, resultLines.length);
+    }
+
+    function renderError(msg, problematicLine) {
+        const safeLine = problematicLine ? problematicLine.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : "N/A";
+        const html = `
+            <div class="error-msg">ОШИБКА ПРИМЕНЕНИЯ DIFF:</div>
+            <div style="padding:10px; color: #333; font-family: sans-serif;">${msg.replace(/\n/g, '<br>')}</div>
+            <div style="padding:10px; font-weight:bold;">Проблемная строка в Diff:</div>
+            <div class="result-line error-line">${safeLine}</div>
+        `;
+        // Сбрасываем нумерацию для ошибки
+        resultLn.innerHTML = ""; 
+        resultDiv.innerHTML = html;
+    }
+
+</script>
+
+</body>
+</html>
