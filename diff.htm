@@ -3,780 +3,726 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Git Diff Tool</title>
+    <title>Smart Git Diff Tool (Single Page)</title>
     <style>
         :root {
-            --bg-color: #f4f4f9;
-            --panel-bg: #ffffff;
-            --border-color: #ccc;
-            --text-color: #333;
-            --line-num-bg: #f0f0f0;
-            --line-num-text: #999;
-            --diff-add-bg: #e6ffec;
-            --diff-del-bg: #ffebe9;
-            --diff-hdr-bg: #f8f9fa;
-            --diff-hdr-text: #795da3;
-            --font-code: 'Consolas', 'Monaco', 'Courier New', monospace;
+            --bg: #1e1e1e;
+            --panel-bg: #252526;
+            --border: #3e3e42;
+            --text: #d4d4d4;
+            --accent: #0e639c;
+            --accent-hover: #1177bb;
+            --gutter-bg: #1e1e1e;
+            --gutter-text: #858585;
+            --diff-add-bg: #2ea04333;
+            --diff-del-bg: #f8514933;
+            --diff-hdr-text: #569cd6;
+            --font: Consolas, 'Courier New', monospace;
             --line-height: 20px;
             --font-size: 13px;
         }
 
         * { box-sizing: border-box; }
-
+        
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
-            margin: 0;
-            padding: 10px;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
+            margin: 0; padding: 0;
+            background: var(--bg); color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            height: 100vh; 
+            display: flex; 
+            flex-direction: column; 
+            overflow: hidden;
         }
 
+        /* --- Header --- */
         header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-            padding: 10px;
-            flex-shrink: 0;
-            background: #fff;
-            border-radius: 6px;
-            border: 1px solid #ddd;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-
-        h1 { margin: 0; font-size: 1.2rem; color: #444; }
-        
-        .settings-bar {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-            font-size: 0.9rem;
-            flex-wrap: wrap;
-        }
-
-        .settings-bar label {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            cursor: pointer;
-            user-select: none;
-            background: #f9f9f9;
-            padding: 4px 8px;
-            border-radius: 4px;
-            border: 1px solid #eee;
-        }
-        
-        .settings-bar label:hover { background: #eee; }
-
-        input[type="number"] {
-            width: 50px;
-            padding: 3px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-
-        /* Основной контейнер */
-        .main-container {
-            display: flex;
-            flex: 1;
-            gap: 10px;
-            min-height: 0; 
-        }
-
-        .column {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
+            padding: 8px 15px;
             background: var(--panel-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            overflow: hidden;
-            min-width: 0;
+            border-bottom: 1px solid var(--border);
+            display: flex; gap: 20px; align-items: center;
+            font-size: 13px; user-select: none; 
+            flex-shrink: 0; flex-wrap: wrap;
+        }
+        
+        .control-group { display: flex; align-items: center; gap: 12px; border-right: 1px solid #444; padding-right: 20px; }
+        .control-group:last-child { border-right: none; }
+
+        label { display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
+        input[type="checkbox"] { cursor: pointer; }
+        input[type="number"], input[type="range"] {
+            background: #3c3c3c; border: 1px solid #555; color: white;
+            padding: 2px 5px; border-radius: 3px; font-family: inherit; font-size: 12px;
+        }
+        input[type="number"] { width: 60px; text-align: center; }
+
+        /* --- Main Layout --- */
+        .main-grid {
+            flex: 1; display: flex; flex-direction: row;
+            overflow: hidden; min-height: 0; 
         }
 
-        .column-header {
-            padding: 8px;
-            background: #e9ecef;
-            border-bottom: 1px solid var(--border-color);
-            font-weight: bold;
-            font-size: 0.9rem;
-            text-align: center;
+        .pane {
+            flex: 1; display: flex; flex-direction: column;
+            border-right: 1px solid var(--border);
+            min-width: 0; min-height: 0;
         }
+        .pane:last-child { border-right: none; }
 
-        .editor-wrapper {
-            position: relative;
-            flex: 1;
-            display: flex;
-            overflow: hidden;
-        }
-
-        /* Номера строк */
-        .line-numbers {
-            width: 45px;
-            background: var(--line-num-bg);
-            color: var(--line-num-text);
-            text-align: right;
-            padding: 10px 5px;
-            font-family: var(--font-code);
-            font-size: var(--font-size);
-            line-height: var(--line-height);
-            user-select: none;
-            overflow: hidden;
-            border-right: 1px solid var(--border-color);
+        .pane-title {
+            background: #333; color: #ccc;
+            padding: 4px 10px; font-size: 11px; font-weight: bold;
+            text-transform: uppercase; letter-spacing: 0.5px;
             flex-shrink: 0;
+            display: flex; justify-content: space-between; align-items: center;
         }
 
-        .line-numbers div {
-            white-space: nowrap;
-            height: var(--line-height); /* Default height */
-            box-sizing: border-box;
+        /* Editor Area */
+        .editor-wrapper {
+            flex: 1; display: flex; position: relative; overflow: hidden; min-height: 0;
         }
 
-        textarea, .result-view {
-            flex: 1;
-            border: none;
-            resize: none;
-            padding: 10px; /* Важно: padding должен совпадать с .mirror-pre */
-            font-family: var(--font-code);
-            font-size: var(--font-size);
-            line-height: var(--line-height);
-            white-space: pre; 
-            overflow: auto;
-            outline: none;
-            background: transparent;
-            color: var(--text-color);
-            tab-size: 4;
-            width: 100%;
-        }
-
-        .result-view {
-            margin: 0;
-            padding: 0; 
-            /* Внутренние блоки будут иметь паддинг */
+        .gutter {
+            width: 45px; background: var(--gutter-bg); color: var(--gutter-text);
+            text-align: right; padding: 10px 5px;
+            font-family: var(--font); font-size: var(--font-size); line-height: var(--line-height);
+            user-select: none; border-right: 1px solid var(--border);
+            overflow: hidden; flex-shrink: 0;
+            cursor: default;
         }
         
-        .result-line {
-            padding: 0 10px;
-            min-height: var(--line-height);
-            white-space: inherit;
+        /* Common style for Textarea, Output, Mirror */
+        .editor-content {
+            font-family: var(--font); font-size: var(--font-size); line-height: var(--line-height);
+            padding: 10px; tab-size: 4;
+            border: none; margin: 0;
         }
 
-        /* --- Стили для Word Wrap --- */
-        .wrap-enabled textarea, .wrap-enabled .result-view {
-            white-space: pre-wrap;
-            word-break: break-all;
-        }
-
-        /* Зеркальный элемент для вычисления высоты строк при Wrap */
-        .mirror-container {
-            position: absolute;
-            top: 0; left: 0;
-            visibility: hidden;
-            pointer-events: none;
-            height: 0; overflow: hidden;
-            width: 100%; /* Должен совпадать с textarea */
-            
-            /* Стили шрифта должны идеально совпадать с textarea */
-            font-family: var(--font-code);
-            font-size: var(--font-size);
-            line-height: var(--line-height);
-            padding: 10px; /* Совпадает с textarea padding */
-            white-space: pre-wrap;
-            word-break: break-all;
-            border: none;
+        textarea.editor-content, div.editor-content.view-mode {
+            flex: 1; background: var(--bg); color: var(--text);
+            resize: none; outline: none; white-space: pre; overflow: auto;
         }
         
-        .mirror-line {
-            min-height: var(--line-height);
-            /* border: 1px solid red; debug */ 
+        /* Mirror ensures exact height calc for word wrap */
+        .mirror {
+            position: absolute; top: 0; left: 0; visibility: hidden; pointer-events: none;
+            width: 100%; height: auto; white-space: pre; overflow: hidden;
+            word-break: break-all; 
+            padding: 10px; /* Must match editor-content padding */
+            font-family: var(--font); font-size: var(--font-size); line-height: var(--line-height);
         }
 
-        /* Diff Styles */
-        .diff-added { background-color: var(--diff-add-bg); }
-        .diff-removed { background-color: var(--diff-del-bg); }
-        .diff-header { 
-            color: var(--diff-hdr-text); 
-            background: var(--diff-hdr-bg); 
-            border-top: 1px solid #eee; 
-            border-bottom: 1px solid #eee;
-            font-style: italic;
+        /* Word Wrap Toggle Classes */
+        .wrap-on textarea, .wrap-on .view-mode, .wrap-on .mirror {
+            white-space: pre-wrap; word-break: break-all;
         }
-        .error-line { background-color: #ffcccc; border: 1px solid red; font-weight: bold; }
-        .error-msg { color: red; padding: 10px; font-weight: bold; background: #fff0f0; border-bottom: 1px solid red; }
 
+        /* --- Controls Area --- */
         .controls {
-            padding: 10px;
-            background: #f8f9fa;
-            border-top: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
+            padding: 10px; background: var(--panel-bg);
+            border-top: 1px solid var(--border);
+            display: flex; gap: 10px; justify-content: center; flex-shrink: 0;
+            flex-wrap: wrap;
         }
-
-        button {
-            padding: 8px 12px;
-            font-size: 0.9rem;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background 0.2s;
-            font-weight: bold;
-            color: white;
-            text-align: center;
-        }
-
-        .btn-apply { background-color: #28a745; }
-        .btn-apply:hover { background-color: #218838; }
-
-        .btn-make { background-color: #007bff; }
-        .btn-make:hover { background-color: #0069d9; }
         
-        .btn-copy { background-color: #6c757d; width: 100%; margin-top: auto; }
-        .btn-copy:hover { background-color: #5a6268; }
+        button {
+            background: var(--accent); color: white; border: none;
+            padding: 6px 14px; border-radius: 2px; cursor: pointer;
+            font-size: 12px; font-weight: bold; font-family: inherit;
+        }
+        button:hover { background: var(--accent-hover); }
+        button:active { transform: translateY(1px); }
+        button.secondary { background: #444; }
+        button.secondary:hover { background: #555; }
+        button.icon-btn { padding: 2px 6px; font-size: 10px; background: #555; margin-left: 5px; color: #ccc;}
+        button.icon-btn:hover { background: #666; }
 
-        @media (max-width: 768px) {
-            .main-container {
-                flex-direction: column;
-                height: auto;
-            }
-            body {
-                height: auto;
-                overflow-y: auto;
-            }
-            .column {
-                height: 350px;
-                margin-bottom: 10px;
-            }
-            header {
-                flex-direction: column;
-                align-items: flex-start;
-            }
+        /* --- Diff Colors --- */
+        .ln-add { background-color: var(--diff-add-bg); width: 100%; display: inline-block; }
+        .ln-del { background-color: var(--diff-del-bg); width: 100%; display: inline-block; opacity: 0.8; }
+        /* When we display result, deleted lines might be hidden or crossed out depending on mode. 
+           In 'Result' view, we typically don't show deleted lines. 
+           But if showing a 'Diff', we do. */
+        
+        .ln-hdr { 
+            color: var(--diff-hdr-text); 
+            font-weight: bold; 
+            display: block; 
+            margin-top: 5px; margin-bottom: 5px;
+            background: #2d2d2d;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+
+        /* --- Mobile --- */
+        @media (max-width: 900px) {
+            body { overflow: auto; height: auto; }
+            .main-grid { flex-direction: column; height: auto; }
+            .pane { height: 500px; border-right: none; border-bottom: 5px solid var(--border); }
+            header { position: sticky; top: 0; z-index: 10; }
         }
     </style>
 </head>
 <body>
 
 <header>
-    <h1>Git Diff Helper</h1>
-    <div class="settings-bar">
-        <label title="Включить визуальный перенос длинных строк">
-            <input type="checkbox" id="chk-word-wrap" onchange="toggleWordWrap()"> 
-            Word Wrap
+    <div class="control-group">
+        <label title="Wrap long lines to fit visible area">
+            <input type="checkbox" id="chkWrap" onchange="toggleWrap()"> <b>Word Wrap</b>
         </label>
-        <label title="Включить стандартные заголовки @@ в Git Diff">
-            <input type="checkbox" id="chk-headers" checked> 
-            Standard Headers (@@)
+    </div>
+
+    <div class="control-group">
+        <label title="Search Strictness (0% = Exact match only, 40% = Very loose)">
+            Fuzzy: <input type="range" id="rngFuzzy" min="0" max="40" value="10" style="width:80px">
+            <span id="valFuzzy" style="width:35px; text-align:right; font-family:monospace; font-weight:bold;">10%</span>
         </label>
-        <label title="Количество строк контекста вокруг изменений">
-            Context: 
-            <input type="number" id="inp-context" value="3" min="0">
+        <label title="How far up/down to search for context (Search Radius)">
+            Radius: <input type="number" id="numRadius" value="100" min="0" step="10">
+        </label>
+    </div>
+
+    <div class="control-group" style="border:none">
+        <label title="Lines of context around changes for Make Diff">
+            Context: <input type="number" id="numContext" value="3" min="0">
         </label>
     </div>
 </header>
 
-<div class="main-container" id="main-container">
-    <!-- Зона 1: Оригинал -->
-    <div class="column">
-        <div class="column-header">Оригинал (Original)</div>
-        <div class="editor-wrapper" id="wrap-orig">
-            <div class="line-numbers" id="ln-orig"><div>1</div></div>
-            <textarea id="input-orig" placeholder="Исходный код..." spellcheck="false"></textarea>
-            <!-- Скрытый контейнер для расчета высоты строк -->
-            <div class="mirror-container" id="mirror-orig"></div>
+<div class="main-grid">
+    <!-- LEFT: ORIGINAL CODE -->
+    <div class="pane">
+        <div class="pane-title">
+            <span>1. Original Source</span>
+            <button class="icon-btn" onclick="clearPane('left')" title="Clear">x</button>
+        </div>
+        <div class="editor-wrapper" id="wrap-left">
+            <div class="gutter" id="gutter-left"></div>
+            <textarea id="input-left" class="editor-content" placeholder="// Paste original code here..." spellcheck="false"></textarea>
+            <div class="mirror" id="mirror-left"></div>
         </div>
     </div>
 
-    <!-- Зона 2: Diff / Измененный -->
-    <div class="column">
-        <div class="column-header">Diff / Измененный</div>
-        <div class="editor-wrapper" id="wrap-diff">
-            <div class="line-numbers" id="ln-diff"><div>1</div></div>
-            <textarea id="input-diff" placeholder="Вставьте Diff или измененный код..." spellcheck="false"></textarea>
-            <div class="mirror-container" id="mirror-diff"></div>
+    <!-- CENTER: DIFF INPUT / MODIFIED CODE -->
+    <div class="pane">
+        <div class="pane-title">
+            <span>2. Diff / Modified Source</span>
+            <button class="icon-btn" onclick="clearPane('center')" title="Clear">x</button>
+        </div>
+        <div class="editor-wrapper" id="wrap-center">
+            <div class="gutter" id="gutter-center"></div>
+            <textarea id="input-center" class="editor-content" placeholder="// Paste an AI DIFF here to Apply&#10;// OR paste full modified code to Make Diff" spellcheck="false"></textarea>
+            <div class="mirror" id="mirror-center"></div>
         </div>
         <div class="controls">
-            <button class="btn-apply" onclick="applyDiff()">Apply DIFF (Применить)</button>
-            <button class="btn-make" onclick="makeDiff()">Make DIFF (Создать)</button>
+            <button onclick="applyDiffAction()" title="Apply Center (Diff) to Left (Original) -> Result">Apply Diff &rarr;</button>
+            <button class="secondary" onclick="makeDiffAction()" title="Compare Left vs Center -> Result">Make Diff</button>
         </div>
     </div>
 
-    <!-- Зона 3: Результат -->
-    <div class="column">
-        <div class="column-header">Результат (Result)</div>
-        <div class="editor-wrapper" id="wrap-res">
-            <div class="line-numbers" id="ln-res"><div>1</div></div>
-            <div id="output-res" class="result-view"></div>
-            <!-- Mirror для результата сложнее, т.к. это div, но мы будем применять line-height напрямую -->
+    <!-- RIGHT: OUTPUT -->
+    <div class="pane">
+        <div class="pane-title">3. Result / Output</div>
+        <div class="editor-wrapper" id="wrap-right">
+            <div class="gutter" id="gutter-right"></div>
+            <!-- Using contenteditable=false div for rich output -->
+            <div id="output-right" class="editor-content view-mode"></div> 
         </div>
-        <div class="controls" style="margin-top:0;">
-             <button class="btn-copy" onclick="copyResult()">Copy Result</button>
+        <div class="controls" style="justify-content: flex-end;">
+            <button class="secondary" onclick="copyResult()">Copy Result</button>
         </div>
     </div>
 </div>
 
 <script>
-    // --- Управление UI и Word Wrap ---
-
-    // Функция обновляет номера строк, учитывая реальную высоту строк в textarea
-    function updateEditorLayout(textareaId, lnId, mirrorId, wrapperId) {
-        const textarea = document.getElementById(textareaId);
-        const ln = document.getElementById(lnId);
-        const mirror = document.getElementById(mirrorId);
-        const wrapper = document.getElementById(wrapperId);
-        
-        const isWrapped = wrapper.classList.contains('wrap-enabled');
-        const text = textarea.value;
-        const lines = text.split('\n'); // Важно: split по логическим строкам
-
-        // Генерируем HTML для номеров строк
-        let lnHtml = '';
-        
-        if (!isWrapped) {
-            // Оптимизация для выключенного переноса (быстро)
-            // Просто создаем div-ы фиксированной высоты
-            ln.innerHTML = lines.map((_, i) => `<div>${i + 1}</div>`).join('');
-            return;
-        }
-
-        // Если Wrap включен, используем сложную логику
-        // 1. Заполняем зеркало контентом
-        mirror.style.width = textarea.clientWidth + 'px'; // Синхронизируем ширину
-        mirror.innerHTML = '';
-        
-        lines.forEach(lineContent => {
-            const div = document.createElement('div');
-            div.className = 'mirror-line';
-            div.textContent = lineContent;
-            // Hack: пустая строка должна иметь высоту
-            if (lineContent.length === 0) div.innerHTML = '&nbsp;'; 
-            mirror.appendChild(div);
-        });
-
-        // 2. Считываем высоты
-        const heights = Array.from(mirror.children).map(div => div.offsetHeight);
-
-        // 3. Строим номера строк с нужными высотами
-        let html = '';
-        heights.forEach((h, i) => {
-            html += `<div style="height:${h}px">${i + 1}</div>`;
-        });
-        ln.innerHTML = html;
-    }
-
-    function setupEditor(textareaId, lnId, mirrorId, wrapperId) {
-        const textarea = document.getElementById(textareaId);
-        const ln = document.getElementById(lnId);
-
-        const update = () => updateEditorLayout(textareaId, lnId, mirrorId, wrapperId);
-        
-        // События для обновления
-        textarea.addEventListener('input', update);
-        textarea.addEventListener('change', update);
-        
-        // Синхронизация скролла
-        const syncScroll = () => { ln.scrollTop = textarea.scrollTop; };
-        textarea.addEventListener('scroll', syncScroll);
-        
-        // Resize observer для обновления при изменении размера окна
-        new ResizeObserver(update).observe(textarea);
-
-        // Initial
-        update();
-    }
-
-    // Инициализация редакторов
-    setupEditor('input-orig', 'ln-orig', 'mirror-orig', 'wrap-orig');
-    setupEditor('input-diff', 'ln-diff', 'mirror-diff', 'wrap-diff');
-
-    // Для результата отдельная логика (он не textarea)
-    const resultDiv = document.getElementById('output-res');
-    const resultLn = document.getElementById('ln-res');
-    const resultWrap = document.getElementById('wrap-res');
-
-    resultDiv.addEventListener('scroll', () => { resultLn.scrollTop = resultDiv.scrollTop; });
+    const $ = id => document.getElementById(id);
     
-    // Обновление нумерации для результата (div)
-    function updateResultLayout() {
-        const isWrapped = resultWrap.classList.contains('wrap-enabled');
-        const lines = resultDiv.children; // div.result-line
-        
-        if (lines.length === 0) {
-            resultLn.innerHTML = '<div>1</div>';
-            return;
-        }
+    // ==========================================
+    // 1. UI CORE: Sync Scrolling & Line Numbers
+    // ==========================================
+    const editors = {};
 
-        let lnHtml = '';
-        for (let i = 0; i < lines.length; i++) {
-            const h = isWrapped ? lines[i].offsetHeight : 20; // 20px default
-            lnHtml += `<div style="height:${h}px">${i + 1}</div>`;
-        }
-        resultLn.innerHTML = lnHtml;
-    }
-    
-    // Resize observer для результата
-    new ResizeObserver(updateResultLayout).observe(resultDiv);
+    function setupEditor(prefix, isTextarea = true) {
+        const elInput = $(`input-${prefix}`) || $(`output-${prefix}`);
+        const elGutter = $(`gutter-${prefix}`);
+        const elWrapper = $(`wrap-${prefix}`);
+        const elMirror = isTextarea ? $(`mirror-${prefix}`) : null; 
 
-    function toggleWordWrap() {
-        const isWrapped = document.getElementById('chk-word-wrap').checked;
-        const wrappers = document.querySelectorAll('.editor-wrapper');
-        wrappers.forEach(el => {
-            if (isWrapped) el.classList.add('wrap-enabled');
-            else el.classList.remove('wrap-enabled');
-        });
-        
-        // Форсируем пересчет высот
-        updateEditorLayout('input-orig', 'ln-orig', 'mirror-orig', 'wrap-orig');
-        updateEditorLayout('input-diff', 'ln-diff', 'mirror-diff', 'wrap-diff');
-        updateResultLayout();
-    }
+        editors[prefix] = { elInput, elGutter, elWrapper, elMirror, isTextarea };
 
-    function getLines(id) {
-        return document.getElementById(id).value.replace(/\r\n/g, "\n").split('\n');
-    }
+        const updateLayout = () => {
+            const isWrap = $('chkWrap').checked;
+            elWrapper.classList.toggle('wrap-on', isWrap);
 
-    function setResultContent(htmlContent, lineCount) {
-        resultDiv.innerHTML = htmlContent;
-        // После вставки контента нужно обновить нумерацию (с учетом wrap)
-        // Небольшая задержка, чтобы браузер отрендерил и мы могли считать высоты
-        requestAnimationFrame(updateResultLayout);
-    }
-
-    async function copyResult() {
-        const text = resultDiv.innerText;
-        try {
-            await navigator.clipboard.writeText(text);
-            const btn = document.querySelector('.btn-copy');
-            const originalText = btn.innerText;
-            btn.innerText = "Copied!";
-            setTimeout(() => btn.innerText = originalText, 1500);
-        } catch (err) {
-            alert('Ошибка: ' + err);
-        }
-    }
-
-    // --- Логика Make DIFF (Улучшенная) ---
-
-    function makeDiff() {
-        const originalLines = getLines('input-orig');
-        const modifiedLines = getLines('input-diff');
-        const contextSize = parseInt(document.getElementById('inp-context').value) || 3;
-        const useHeaders = document.getElementById('chk-headers').checked;
-
-        const rawDiff = computeDiff(originalLines, modifiedLines);
-        
-        // Преобразуем в структуру для анализа
-        let diffItems = [];
-        let oldIdx = 1, newIdx = 1;
-        rawDiff.forEach(item => {
-            let type = 'ctx';
-            if (item.added) type = 'add';
-            if (item.removed) type = 'del';
-            diffItems.push({ type, value: item.value, oldLine: (type !== 'add') ? oldIdx++ : null, newLine: (type !== 'del') ? newIdx++ : null });
-        });
-
-        // Если выключены заголовки, просто выводим список с изменениями (и, возможно, контекстом)
-        // Но стандартно "Make Diff" подразумевает контекст. Будем использовать ту же логику чанков.
-        
-        let indicesToShow = new Set();
-        for (let i = 0; i < diffItems.length; i++) {
-            if (diffItems[i].type !== 'ctx') {
-                for (let j = Math.max(0, i - contextSize); j <= Math.min(diffItems.length - 1, i + contextSize); j++) indicesToShow.add(j);
-            }
-        }
-
-        if (indicesToShow.size === 0) {
-            // Нет изменений?
-            if (originalLines.length === 1 && originalLines[0] === "" && modifiedLines.length === 1 && modifiedLines[0] === "") {
-                renderDiffToResult("");
-            } else if (originalLines.join('\n') === modifiedLines.join('\n')) {
-                 renderDiffToResult("No changes.");
-            } else {
-                 renderDiffToResult("");
-            }
-            return;
-        }
-
-        let diffText = "";
-        if (useHeaders) {
-            diffText += "--- Original\n+++ Modified\n";
-        }
-        
-        let sortedIndices = Array.from(indicesToShow).sort((a, b) => a - b);
-        let hunks = [];
-        let currentHunk = [];
-        
-        for (let i = 0; i < sortedIndices.length; i++) {
-            const idx = sortedIndices[i];
-            if (currentHunk.length > 0 && idx > sortedIndices[i - 1] + 1) {
-                hunks.push(currentHunk);
-                currentHunk = [];
-            }
-            currentHunk.push(idx);
-        }
-        if (currentHunk.length > 0) hunks.push(currentHunk);
-
-        hunks.forEach(hunkIndices => {
-            if (useHeaders) {
-                let oldStart = null, oldCnt = 0, newStart = null, newCnt = 0;
-                hunkIndices.forEach(idx => {
-                    const item = diffItems[idx];
-                    if (item.type !== 'add') { if (oldStart === null) oldStart = item.oldLine; oldCnt++; }
-                    if (item.type !== 'del') { if (newStart === null) newStart = item.newLine; newCnt++; }
-                });
-
-                // Fix start for pure adds/dels at start/end
-                if (oldStart === null) {
-                     let prev = hunkIndices[0] - 1;
-                     while(prev >= 0 && diffItems[prev].oldLine === null) prev--;
-                     oldStart = (prev >= 0) ? diffItems[prev].oldLine + 1 : 0; 
-                }
-                if (newStart === null) {
-                     let prev = hunkIndices[0] - 1;
-                     while(prev >= 0 && diffItems[prev].newLine === null) prev--;
-                     newStart = (prev >= 0) ? diffItems[prev].newLine + 1 : 0; 
-                }
+            let lines = [];
+            
+            if (isTextarea) {
+                // For Textarea, we simulate wrapping using the mirror
+                lines = elInput.value.split('\n');
                 
-                diffText += `@@ -${oldStart},${oldCnt} +${newStart},${newCnt} @@\n`;
-            }
-
-            hunkIndices.forEach(idx => {
-                const item = diffItems[idx];
-                const prefix = (item.type === 'add') ? '+' : (item.type === 'del' ? '-' : ' ');
-                diffText += prefix + item.value + "\n";
-            });
-        });
-
-        renderDiffToResult(diffText);
-    }
-
-    function computeDiff(oldLines, newLines) {
-        // Простой LCS
-        const N = oldLines.length;
-        const M = newLines.length;
-        const dp = Array(N + 1).fill(null).map(() => new Int32Array(M + 1));
-
-        for (let i = 1; i <= N; i++) {
-            for (let j = 1; j <= M; j++) {
-                if (oldLines[i - 1] === newLines[j - 1]) dp[i][j] = dp[i - 1][j - 1] + 1;
-                else dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
-            }
-        }
-
-        let i = N, j = M;
-        const diff = [];
-        while (i > 0 || j > 0) {
-            if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
-                diff.unshift({ value: oldLines[i - 1], added: false, removed: false });
-                i--; j--;
-            } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-                diff.unshift({ value: newLines[j - 1], added: true, removed: false });
-                j--;
-            } else if (i > 0 && (j === 0 || dp[i][j - 1] < dp[i - 1][j])) {
-                diff.unshift({ value: oldLines[i - 1], added: false, removed: true });
-                i--;
-            }
-        }
-        return diff;
-    }
-
-    // --- Логика Apply DIFF (Улучшенная Fuzzy Search) ---
-
-    function applyDiff() {
-        const originalText = document.getElementById('input-orig').value;
-        const diffText = document.getElementById('input-diff').value;
-        const originalLines = originalText.replace(/\r\n/g, "\n").split('\n');
-        const diffLines = diffText.replace(/\r\n/g, "\n").split('\n');
-        
-        let resultLines = [];
-        let origCursor = 0; 
-        
-        try {
-            let hunks = parseDiffToHunks(diffLines);
-
-            for (let hIdx = 0; hIdx < hunks.length; hIdx++) {
-                const hunk = hunks[hIdx];
-                
-                // Извлекаем контекст для поиска
-                let contextLines = [];
-                for(let line of hunk.lines) {
-                    if (line.type === 'ctx') contextLines.push(line.text);
-                    else if (line.type === 'del') break; 
-                    else if (line.type === 'add') break; 
-                }
-                
-                let foundIndex = -1;
-                let targetIdx = hunk.oldStart - 1; // 0-based
-                
-                // Стратегия поиска:
-                // 1. Проверяем точное место (targetIdx)
-                // 2. Если нет, ищем "расходящейся волной" вверх и вниз от targetIdx
-                // Ограничение: нельзя искать выше origCursor
-                
-                const maxSearchRadius = 5000; // Ограничиваем поиск разумным числом
-                let searchRange = Math.max(originalLines.length - targetIdx, targetIdx);
-                if (searchRange > maxSearchRadius) searchRange = maxSearchRadius;
-
-                // Функция проверки совпадения
-                const check = (idx) => {
-                    if (idx < origCursor) return false;
-                    if (idx >= originalLines.length) {
-                         // Если контекст пуст (вставка в конец или в пустой файл), разрешаем
-                         if (contextLines.length === 0) return true; 
-                         return false;
-                    }
-                    if (contextLines.length === 0) return true; // Пустой контекст всегда совпадает?
-                    return matchContext(originalLines, idx, contextLines);
-                };
-
-                // Алгоритм "Spiral" / "Wave"
-                for (let offset = 0; offset <= searchRange; offset++) {
-                    // Check Forward (downwards)
-                    let checkIdx = targetIdx + offset;
-                    if (check(checkIdx)) {
-                        foundIndex = checkIdx;
-                        break;
-                    }
+                if (isWrap) {
+                    // Sync mirror content
+                    elMirror.innerHTML = '';
+                    elMirror.style.width = elInput.clientWidth + 'px'; // Exact width match is crucial
                     
-                    // Check Backward (upwards)
-                    if (offset > 0) {
-                        checkIdx = targetIdx - offset;
-                        if (check(checkIdx)) {
-                            foundIndex = checkIdx;
-                            break;
-                        }
-                    }
+                    lines.forEach(line => {
+                        const div = document.createElement('div');
+                        // Use textContent to prevent HTML injection, but ensure space preserves height
+                        div.textContent = line.length > 0 ? line : '\u200B'; // Zero-width space for empty line height
+                        elMirror.appendChild(div);
+                    });
+
+                    // Measure heights
+                    let html = '';
+                    Array.from(elMirror.children).forEach((div, i) => {
+                        html += `<div style="height:${div.offsetHeight}px">${i + 1}</div>`;
+                    });
+                    elGutter.innerHTML = html;
+                } else {
+                    // Fast path for no-wrap
+                    const h = 20; // var(--line-height)
+                    elGutter.innerHTML = lines.map((_, i) => `<div style="height:${h}px">${i+1}</div>`).join('');
+                }
+            } else {
+                // For Output Div (HTML content)
+                // We assume the output is generated as a list of <div> lines
+                const children = Array.from(elInput.children);
+                if (children.length === 0) {
+                    elGutter.innerHTML = '';
+                    return;
                 }
                 
-                // Fallback: если не нашли волной, пробуем линейный поиск от курсора (для надежности)
-                if (foundIndex === -1) {
-                     for(let i = origCursor; i < originalLines.length; i++) {
-                         if(check(i)) {
-                             foundIndex = i;
-                             break;
-                         }
-                     }
-                }
-
-                if (foundIndex === -1) {
-                     // Формируем понятную ошибку
-                     let ctxPreview = contextLines.slice(0, 3).join('\n');
-                     if (contextLines.length === 0) ctxPreview = "[Нет контекста / Вставка]";
-                     throw new Error(`Контекст чанка #${hIdx+1} (@@ -${hunk.oldStart}...) не найден.\nИскали около строки ${hunk.oldStart}.\nОжидалось:\n"${ctxPreview}"`);
-                }
-
-                // Apply: Fill gap
-                while (origCursor < foundIndex) {
-                    resultLines.push({ type: 'ctx', text: originalLines[origCursor] });
-                    origCursor++;
-                }
-
-                // Apply: Hunk
-                for (let i = 0; i < hunk.lines.length; i++) {
-                    const line = hunk.lines[i];
-                    if (line.type === 'ctx') {
-                        // Форсируем пропуск строки, даже если она чуть отличается (мы уже нашли начало блока)
-                        origCursor++; 
-                        resultLines.push({ type: 'ctx', text: line.text });
-                    } else if (line.type === 'del') {
-                        origCursor++;
-                    } else if (line.type === 'add') {
-                        resultLines.push({ type: 'add', text: line.text });
-                    }
-                }
+                let html = '';
+                children.forEach((child, i) => {
+                    const h = child.offsetHeight;
+                    // If header, don't show number, or show space
+                    const num = child.getAttribute('data-ln') || (child.classList.contains('ln-hdr') ? ' ' : (i+1));
+                    html += `<div style="height:${h}px">${num}</div>`;
+                });
+                elGutter.innerHTML = html;
             }
+        };
 
-            while (origCursor < originalLines.length) {
-                resultLines.push({ type: 'ctx', text: originalLines[origCursor] });
-                origCursor++;
-            }
+        if (isTextarea) {
+            elInput.addEventListener('input', updateLayout);
+            elInput.addEventListener('scroll', () => elGutter.scrollTop = elInput.scrollTop);
+            // Resize observer to handle window resize causing wrap changes
+            new ResizeObserver(updateLayout).observe(elInput);
+        } else {
+             // For output div, scroll sync
+             elInput.addEventListener('scroll', () => elGutter.scrollTop = elInput.scrollTop);
+             new ResizeObserver(updateLayout).observe(elInput);
+        }
 
-            renderResult(resultLines);
+        editors[prefix].update = updateLayout;
+        updateLayout();
+    }
+
+    setupEditor('left', true);
+    setupEditor('center', true);
+    setupEditor('right', false);
+
+    function toggleWrap() {
+        Object.values(editors).forEach(ed => ed.update());
+    }
+
+    function clearPane(pane) {
+        $(`input-${pane}`).value = '';
+        editors[pane].update();
+    }
+
+    $('rngFuzzy').oninput = function() { $('valFuzzy').textContent = this.value + '%'; };
+
+    // ==========================================
+    // 2. CORE LOGIC: Apply Diff (Fuzzy)
+    // ==========================================
+    function applyDiffAction() {
+        const srcText = $('input-left').value;
+        const patchText = $('input-center').value;
+        const fuzzyThreshold = parseInt($('rngFuzzy').value) / 100;
+        const radius = parseInt($('numRadius').value) || 100;
+
+        // Initialize as objects to handle mixed content safely later
+        const srcLines = srcText.split('\n').map(l => ({ text: l, type: 'ctx' }));
+        
+        try {
+            // 1. Parse Hunks
+            const hunks = parseDiff(patchText);
+            if (hunks.length === 0) throw new Error("No valid diff hunks (starting with @@) found in Center pane.");
+
+            // 2. Apply Hunks
+            const resultLines = fuzzyPatch(srcLines, hunks, fuzzyThreshold, radius);
+
+            // 3. Render
+            renderOutput(resultLines, false); // false = show as file (not diff view)
 
         } catch (e) {
-            renderError(e.message);
+            alert("Error applying diff:\n" + e.message);
+            console.error(e);
         }
     }
 
-    function matchContext(fileLines, startIdx, contextLines) {
-        if (startIdx + contextLines.length > fileLines.length) return false;
-        for (let i = 0; i < contextLines.length; i++) {
-            if (fileLines[startIdx + i] !== contextLines[i]) return false;
-        }
-        return true;
-    }
-
-    function parseDiffToHunks(lines) {
-        let hunks = [];
+    function parseDiff(text) {
+        const lines = text.split('\n');
+        const hunks = [];
         let currentHunk = null;
-        let i = 0;
-        
-        while(i < lines.length && (lines[i].startsWith('---') || lines[i].startsWith('+++'))) i++;
 
-        for (; i < lines.length; i++) {
-            const line = lines[i];
+        for (let line of lines) {
             if (line.startsWith('@@')) {
-                if (currentHunk) hunks.push(currentHunk);
-                const match = /@@ \-(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line);
-                if (!match) throw new Error("Неверный формат заголовка: " + line);
-                
-                currentHunk = {
-                    oldStart: parseInt(match[1]),
-                    oldLen: parseInt(match[2] || 1),
-                    lines: []
-                };
+                // Parse Header: @@ -OldStart,OldLen +NewStart,NewLen @@
+                const m = line.match(/@@\s*-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s*@@/);
+                if (m) {
+                    if (currentHunk) hunks.push(currentHunk);
+                    currentHunk = {
+                        oldStart: parseInt(m[1]),
+                        lines: []
+                    };
+                }
             } else if (currentHunk) {
-                if (line.length === 0) continue; 
-                const typeChar = line[0];
-                const text = line.substring(1);
-                
-                if (typeChar === ' ') currentHunk.lines.push({type: 'ctx', text});
-                else if (typeChar === '+') currentHunk.lines.push({type: 'add', text});
-                else if (typeChar === '-') currentHunk.lines.push({type: 'del', text});
+                // Collect lines
+                if (line.startsWith('+')) currentHunk.lines.push({ op: '+', content: line.slice(1) });
+                else if (line.startsWith('-')) currentHunk.lines.push({ op: '-', content: line.slice(1) });
+                else if (line.startsWith(' ')) currentHunk.lines.push({ op: ' ', content: line.slice(1) });
+                else if (line === '') currentHunk.lines.push({ op: ' ', content: '' }); // Empty context line often loses space
+                // Ignore other lines
             }
         }
         if (currentHunk) hunks.push(currentHunk);
         return hunks;
     }
 
-    function renderDiffToResult(diffText) {
-        const lines = diffText.split('\n');
-        let html = '';
-        lines.forEach(line => {
-            let className = 'result-line';
-            if (line.startsWith('+') && !line.startsWith('+++')) className += ' diff-added';
-            else if (line.startsWith('-') && !line.startsWith('---')) className += ' diff-removed';
-            else if (line.startsWith('@@')) className += ' diff-header';
+    function fuzzyPatch(fileLines, hunks, threshold, radius) {
+        let result = [...fileLines];
+        let offset = 0; // Shift in line numbers due to previous insertions/deletions
+
+        hunks.forEach((hunk, hIdx) => {
+            // 1. Identify the "Anchor Block" in the hunk (Context + Deletions)
+            const anchorBlock = hunk.lines.filter(l => l.op === ' ' || l.op === '-');
             
-            const safeContent = line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            html += `<div class="${className}">${safeContent || '&nbsp;'}</div>`;
+            // Expected location in the *current* result array (adjusted by offset)
+            let expectedIndex = (hunk.oldStart - 1) + offset;
+            
+            // 2. Find Best Match
+            let bestIdx = -1;
+            let bestScore = -1.0;
+
+            // Search range: [expected - radius, expected + radius]
+            for (let r = 0; r <= radius; r++) {
+                const offsets = r === 0 ? [0] : [r, -r];
+                
+                for (let dir of offsets) {
+                    let idx = expectedIndex + dir;
+                    
+                    if (idx < 0 || idx >= result.length) continue;
+                    // If block exceeds file end significantly (allow 1 line slack for EOF)
+                    if (idx + anchorBlock.length > result.length + 1) continue; 
+
+                    // Calculate Score
+                    let scoreSum = 0;
+                    let validLines = 0;
+
+                    for (let k = 0; k < anchorBlock.length; k++) {
+                        if (idx + k >= result.length) break; 
+                        
+                        const srcLineObj = result[idx + k];
+                        
+                        // Robust trim: check if it is string or object (should be object due to init, but safety first)
+                        const srcTxt = (typeof srcLineObj === 'string' ? srcLineObj : srcLineObj.text);
+                        const patTxt = anchorBlock[k].content;
+                        
+                        const sT = srcTxt.trim();
+                        const pT = patTxt.trim();
+                        
+                        let sim = 0;
+                        if (sT === pT) {
+                            sim = 1;
+                        } else {
+                            const maxLen = Math.max(sT.length, pT.length);
+                            if (maxLen === 0) sim = 1;
+                            else {
+                                const dist = levenshtein(sT, pT);
+                                sim = 1 - (dist / maxLen);
+                            }
+                        }
+                        
+                        scoreSum += sim;
+                        validLines++;
+                    }
+
+                    if (validLines === 0 && anchorBlock.length === 0) {
+                         // Insert only hunk (no context/deletions)? Match is perfect at index.
+                         bestScore = 1; bestIdx = idx; break;
+                    }
+
+                    const avgScore = validLines > 0 ? (scoreSum / validLines) : 0;
+
+                    if (avgScore > bestScore) {
+                        bestScore = avgScore;
+                        bestIdx = idx;
+                    }
+                }
+                if (bestScore === 1.0) break; // Found exact match
+            }
+
+            // Check Threshold
+            if (bestScore < (1.0 - threshold)) {
+                // Insert warning in file
+                const warnMsg = `<<<< ERR: Hunk #${hIdx+1} failed to match (Score ${bestScore.toFixed(2)}) >>>>`;
+                result.splice(Math.max(0, expectedIndex), 0, { text: warnMsg, type: 'del' });
+                offset += 1;
+                return; // Skip this hunk
+            }
+
+            // 3. Construct Replacement Block
+            const newSegment = [];
+            let consumedCount = 0;
+
+            hunk.lines.forEach(hLine => {
+                if (hLine.op === ' ') {
+                    // Context: Keep the original line from source to minimize noise
+                    if (bestIdx + consumedCount < result.length) {
+                        const original = result[bestIdx + consumedCount];
+                        newSegment.push({ text: original.text, type: 'ctx' }); 
+                        consumedCount++;
+                    } else {
+                         // End of file edge case
+                         newSegment.push({ text: hLine.content, type: 'ctx' });
+                    }
+                } else if (hLine.op === '-') {
+                    // Delete: Consume source line, don't output
+                    consumedCount++;
+                } else if (hLine.op === '+') {
+                    // Add: Output new line
+                    newSegment.push({ text: hLine.content, type: 'add' });
+                }
+            });
+
+            // 4. Splice into Result
+            result.splice(bestIdx, consumedCount, ...newSegment);
+
+            // 5. Update Offset
+            offset += (newSegment.length - consumedCount);
         });
-        setResultContent(html, lines.length);
+
+        return result;
     }
 
-    function renderResult(resultLines) {
+    // ==========================================
+    // 3. CORE LOGIC: Make Diff
+    // ==========================================
+    function makeDiffAction() {
+        const leftText = $('input-left').value.split('\n');
+        const rightText = $('input-center').value.split('\n');
+        const contextLines = parseInt($('numContext').value) || 3;
+
+        // Compute LCS
+        const matrix = lcsMatrix(leftText, rightText);
+        const diffOps = backtrackLCS(matrix, leftText, rightText);
+
+        // Group into Hunks
+        const hunks = groupHunks(diffOps, contextLines);
+
+        // Render Diff View
+        renderDiffView(hunks);
+    }
+
+    function lcsMatrix(t1, t2) {
+        const N = t1.length;
+        const M = t2.length;
+        // Flat array for performance optimization if needed, but 2D array is easier to read
+        const dp = Array(N + 1).fill(null).map(() => new Uint16Array(M + 1));
+        
+        for (let i = 1; i <= N; i++) {
+            for (let j = 1; j <= M; j++) {
+                if (t1[i - 1] === t2[j - 1]) dp[i][j] = dp[i - 1][j - 1] + 1;
+                else dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+            }
+        }
+        return dp;
+    }
+
+    function backtrackLCS(dp, t1, t2) {
+        let i = t1.length, j = t2.length;
+        const result = [];
+        while (i > 0 || j > 0) {
+            if (i > 0 && j > 0 && t1[i - 1] === t2[j - 1]) {
+                result.push({ op: ' ', text: t1[i - 1] });
+                i--; j--;
+            } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+                result.push({ op: '+', text: t2[j - 1] });
+                j--;
+            } else {
+                result.push({ op: '-', text: t1[i - 1] });
+                i--;
+            }
+        }
+        return result.reverse();
+    }
+
+    function groupHunks(ops, ctxSize) {
+        const hunks = [];
+        let i = 0;
+        let oldLine = 1, newLine = 1;
+
+        while (i < ops.length) {
+            // Find next change
+            if (ops[i].op === ' ') {
+                oldLine++; newLine++;
+                i++;
+                continue;
+            }
+
+            // Change found. Start Hunk.
+            const startIdx = Math.max(0, i - ctxSize);
+            
+            // Re-calculate line numbers for start of hunk
+            let hOld = oldLine;
+            let hNew = newLine;
+            for(let k=i-1; k>=startIdx; k--) {
+                if(ops[k].op !== '+') hOld--;
+                if(ops[k].op !== '-') hNew--;
+            }
+
+            // Find end of hunk (change + context)
+            let endIdx = i;
+            while(endIdx < ops.length) {
+                if (ops[endIdx].op !== ' ') {
+                    endIdx++; // consume change
+                    continue;
+                }
+                // Check if we have enough clear context ahead to close hunk
+                let clearContext = 0;
+                let lookAhead = endIdx;
+                while(lookAhead < ops.length && ops[lookAhead].op === ' ' && clearContext < ctxSize) {
+                    clearContext++;
+                    lookAhead++;
+                }
+                if (lookAhead < ops.length && ops[lookAhead].op !== ' ' && clearContext < ctxSize) {
+                    endIdx = lookAhead; // Jump to next change
+                } else {
+                    endIdx += clearContext;
+                    break;
+                }
+            }
+
+            // Create Hunk
+            const slice = ops.slice(startIdx, endIdx);
+            let oldCnt = 0, newCnt = 0;
+            slice.forEach(op => {
+                if (op.op !== '+') oldCnt++;
+                if (op.op !== '-') newCnt++;
+            });
+
+            hunks.push({
+                header: `@@ -${hOld},${oldCnt} +${hNew},${newCnt} @@`,
+                lines: slice
+            });
+
+            // Advance cursor to end of this hunk
+            for(let k=i; k<endIdx; k++) {
+                if(ops[k].op !== '+') oldLine++;
+                if(ops[k].op !== '-') newLine++;
+            }
+            
+            i = endIdx;
+        }
+        return hunks;
+    }
+
+    // ==========================================
+    // 4. RENDERING & HELPERS
+    // ==========================================
+    function renderOutput(lines, isDiffView) {
+        const container = $('output-right');
         let html = '';
-        resultLines.forEach(item => {
-             let className = 'result-line';
-             if (item.type === 'add') className += ' diff-added'; 
-             
-             const safeContent = item.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-             html += `<div class="${className}">${safeContent || '&nbsp;'}</div>`;
+        let copyText = '';
+
+        lines.forEach((line, idx) => {
+            const safeText = escapeHtml(line.text || '');
+            let cls = '';
+            
+            if (line.type === 'add') cls = 'ln-add';
+            else if (line.type === 'del') cls = 'ln-del'; 
+            else if (line.type === 'hdr') cls = 'ln-hdr';
+            
+            const lnAttr = line.type === 'hdr' ? '' : `data-ln="${idx+1}"`; 
+            
+            html += `<div class="${cls}" ${lnAttr}>${safeText.length === 0 ? ' ' : safeText}</div>`;
+            copyText += line.text + '\n';
         });
-        setResultContent(html, resultLines.length);
+
+        container.innerHTML = html;
+        container._copyText = copyText; 
+        editors.right.update();
     }
 
-    function renderError(msg) {
-        const html = `
-            <div class="error-msg">ОШИБКА:</div>
-            <div style="padding:10px; color: #333; font-family: sans-serif;">${msg.replace(/\n/g, '<br>')}</div>
-        `;
-        resultLn.innerHTML = ""; 
-        resultDiv.innerHTML = html;
+    function renderDiffView(hunks) {
+        const container = $('output-right');
+        let html = '';
+        let copyText = '';
+        
+        // Header
+        const header = "--- a/original\n+++ b/modified\n";
+        html += `<div class="ln-hdr">${escapeHtml(header)}</div>`;
+        copyText += header;
+
+        if(hunks.length === 0) {
+            html += "<div>No changes</div>";
+        }
+
+        hunks.forEach(h => {
+            html += `<div class="ln-hdr">${escapeHtml(h.header)}</div>`;
+            copyText += h.header + '\n';
+            
+            h.lines.forEach(l => {
+                let cls = '';
+                if(l.op === '+') cls = 'ln-add';
+                if(l.op === '-') cls = 'ln-del';
+                
+                const txt = l.op + l.text;
+                html += `<div class="${cls}">${escapeHtml(txt)}</div>`;
+                copyText += txt + '\n';
+            });
+        });
+
+        container.innerHTML = html;
+        container._copyText = copyText;
+        editors.right.update();
+    }
+
+    function levenshtein(a, b) {
+        if (!a) return b ? b.length : 0;
+        if (!b) return a.length;
+        const m = a.length, n = b.length;
+        let row = new Int32Array(n + 1);
+        for (let j = 0; j <= n; j++) row[j] = j;
+        
+        for (let i = 1; i <= m; i++) {
+            let prev = i;
+            for (let j = 1; j <= n; j++) {
+                let val;
+                if (a[i - 1] === b[j - 1]) val = row[j - 1]; 
+                else val = Math.min(row[j - 1], row[j], prev) + 1;
+                row[j - 1] = prev;
+                prev = val;
+            }
+            row[n] = prev;
+        }
+        return row[n];
+    }
+
+    function escapeHtml(text) {
+        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function copyResult() {
+        const text = $('output-right')._copyText || $('output-right').innerText;
+        navigator.clipboard.writeText(text).then(() => {
+            const btn = document.querySelector('button[onclick="copyResult()"]');
+            const old = btn.textContent;
+            btn.textContent = "Copied!";
+            setTimeout(() => btn.textContent = old, 1500);
+        });
     }
 </script>
-
 </body>
 </html>
