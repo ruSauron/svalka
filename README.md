@@ -21,3 +21,5 @@
 [TOTP / Google Authenticator](totp.htm)
 
 [Mikrotik в одну строку](mikrotik-line.htm)
+
+[git diff с допущениями](diff.htm)
