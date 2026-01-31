@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Конвертер субтитров ASS/SRT</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        textarea {
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold text-center mb-2 text-blue-400">Конвертер субтитров ASS/SRT</h1>
+        <p class="text-center text-gray-400 mb-6">Извлечение текста для перевода и объединение обратно с временными метками</p>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+            <!-- Исходные субтитры -->
+            <div class="flex flex-col">
+                <div class="flex justify-between items-center mb-2">
+                    <label class="text-lg font-semibold text-green-400">1. Исходные субтитры</label>
+                    <div class="flex gap-2">
+                        <input type="file" id="fileInput" accept=".ass,.srt" class="hidden">
+                        <button onclick="document.getElementById('fileInput').click()" 
+                                class="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm">
+                            📁 Загрузить
+                        </button>
+                        <button onclick="clearField('source')" 
+                                class="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm">
+                            ✕ Очистить
+                        </button>
+                    </div>
+                </div>
+                <textarea id="sourceText" 
+                          class="flex-1 min-h-[400px] bg-gray-800 border border-gray-600 rounded-lg p-3 text-sm resize-none focus:border-green-500 focus:outline-none"
+                          placeholder="Вставьте сюда субтитры в формате .ass или .srt"></textarea>
+                <div class="mt-2 text-sm text-gray-400">
+                    Формат: <span id="detectedFormat" class="text-yellow-400">не определён</span>
+                </div>
+            </div>
+            
+            <!-- Текст без меток -->
+            <div class="flex flex-col">
+                <div class="flex justify-between items-center mb-2">
+                    <label class="text-lg font-semibold text-yellow-400">2. Текст для перевода</label>
+                    <div class="flex gap-2">
+                        <button onclick="copyToClipboard('extractedText')" 
+                                class="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm">
+                            📋 Копировать
+                        </button>
+                        <button onclick="clearField('extracted')" 
+                                class="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm">
+                            ✕ Очистить
+                        </button>
+                    </div>
+                </div>
+                <textarea id="extractedText" 
+                          class="flex-1 min-h-[400px] bg-gray-800 border border-gray-600 rounded-lg p-3 text-sm resize-none focus:border-yellow-500 focus:outline-none"
+                          placeholder="Здесь появится извлечённый текст. После перевода вставьте переведённый текст сюда."></textarea>
+                <div class="mt-2 text-sm text-gray-400">
+                    Строк: <span id="lineCount" class="text-yellow-400">0</span>
+                </div>
+            </div>
+            
+            <!-- Результат -->
+            <div class="flex flex-col">
+                <div class="flex justify-between items-center mb-2">
+                    <label class="text-lg font-semibold text-purple-400">3. Результат</label>
+                    <div class="flex gap-2">
+                        <button onclick="copyToClipboard('resultText')" 
+                                class="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm">
+                            📋 Копировать
+                        </button>
+                        <button onclick="downloadResult()" 
+                                class="px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded text-sm">
+                            💾 Скачать
+                        </button>
+                    </div>
+                </div>
+                <textarea id="resultText" 
+                          class="flex-1 min-h-[400px] bg-gray-800 border border-gray-600 rounded-lg p-3 text-sm resize-none focus:border-purple-500 focus:outline-none"
+                          placeholder="Здесь появится результат с восстановленными временными метками" readonly></textarea>
+                <div class="mt-2 text-sm text-gray-400">
+                    Статус: <span id="resultStatus" class="text-purple-400">ожидание</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Кнопки действий -->
+        <div class="flex justify-center gap-4 mb-6">
+            <button onclick="extractText()" 
+                    class="px-6 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-semibold text-lg transition-all hover:scale-105">
+                ➡️ Извлечь текст
+            </button>
+            <button onclick="mergeText()" 
+                    class="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold text-lg transition-all hover:scale-105">
+                🔗 Объединить обратно
+            </button>
+        </div>
+        
+        <!-- Инструкция -->
+        <div class="bg-gray-800 rounded-lg p-4 text-sm">
+            <h3 class="font-semibold text-blue-400 mb-2">📖 Инструкция:</h3>
+            <ol class="list-decimal list-inside space-y-1 text-gray-300">
+                <li>Загрузите или вставьте субтитры в формате .ass или .srt в первое поле</li>
+                <li>Нажмите "Извлечь текст" — текст без временных меток появится во втором поле</li>
+                <li>Скопируйте текст, переведите его (в переводчике, AI и т.д.)</li>
+                <li>Вставьте переведённый текст во второе поле (важно сохранить количество строк!)</li>
+                <li>Нажмите "Объединить обратно" — готовые субтитры появятся в третьем поле</li>
+                <li>Скачайте результат или скопируйте его</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        let parsedData = {
+            format: null,
+            header: '',
+            entries: [],
+            originalLineCount: 0
+        };
+
+        // Загрузка файла
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('sourceText').value = e.target.result;
+                    detectFormat();
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        // Автоопределение формата при вводе
+        document.getElementById('sourceText').addEventListener('input', detectFormat);
+
+        // Обновление счётчика строк
+        document.getElementById('extractedText').addEventListener('input', function() {
+            updateLineCount();
+        });
+
+        function detectFormat() {
+            const text = document.getElementById('sourceText').value;
+            const formatSpan = document.getElementById('detectedFormat');
+            
+            if (text.includes('[Script Info]') || text.includes('[V4+ Styles]') || text.includes('[Events]')) {
+                parsedData.format = 'ass';
+                formatSpan.textContent = 'ASS/SSA';
+                formatSpan.className = 'text-green-400';
+            } else if (/^\d+\s*\n\d{2}:\d{2}:\d{2}[,\.]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[,\.]\d{3}/m.test(text)) {
+                parsedData.format = 'srt';
+                formatSpan.textContent = 'SRT';
+                formatSpan.className = 'text-blue-400';
+            } else if (text.trim()) {
+                formatSpan.textContent = 'неизвестный';
+                formatSpan.className = 'text-red-400';
+            } else {
+                formatSpan.textContent = 'не определён';
+                formatSpan.className = 'text-yellow-400';
+            }
+        }
+
+        function updateLineCount() {
+            const text = document.getElementById('extractedText').value;
+            const lines = text.trim() ? text.trim().split('\n').length : 0;
+            const lineCountSpan = document.getElementById('lineCount');
+            lineCountSpan.textContent = lines;
+            
+            if (parsedData.originalLineCount > 0 && lines !== parsedData.originalLineCount) {
+                lineCountSpan.className = 'text-red-400';
+                lineCountSpan.textContent = `${lines} (было: ${parsedData.originalLineCount})`;
+            } else {
+                lineCountSpan.className = 'text-yellow-400';
+            }
+        }
+
+        function extractText() {
+            const source = document.getElementById('sourceText').value;
+            
+            if (!source.trim()) {
+                alert('Вставьте субтитры в первое поле!');
+                return;
+            }
+
+            detectFormat();
+
+            if (parsedData.format === 'ass') {
+                extractASS(source);
+            } else if (parsedData.format === 'srt') {
+                extractSRT(source);
+            } else {
+                alert('Не удалось определить формат субтитров. Поддерживаются форматы ASS и SRT.');
+                return;
+            }
+
+            const extractedLines = parsedData.entries.map(e => e.text);
+            document.getElementById('extractedText').value = extractedLines.join('\n');
+            parsedData.originalLineCount = extractedLines.length;
+            updateLineCount();
+        }
+
+        function extractASS(source) {
+            const lines = source.split('\n');
+            parsedData.entries = [];
+            parsedData.header = '';
+            
+            let inEvents = false;
+            let headerLines = [];
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                
+                if (line.trim().startsWith('[Events]')) {
+                    inEvents = true;
+                    headerLines.push(line);
+                    continue;
+                }
+                
+                if (!inEvents) {
+                    headerLines.push(line);
+                    continue;
+                }
+                
+                if (line.trim().startsWith('Format:')) {
+                    headerLines.push(line);
+                    continue;
+                }
+                
+                if (line.trim().startsWith('Dialogue:') || line.trim().startsWith('Comment:')) {
+                    const match = line.match(/^(Dialogue|Comment):\s*(\d+),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),(.*)$/);
+                    if (match) {
+                        parsedData.entries.push({
+                            type: match[1],
+                            layer: match[2],
+                            start: match[3],
+                            end: match[4],
+                            style: match[5],
+                            name: match[6],
+                            marginL: match[7],
+                            marginR: match[8],
+                            marginV: match[9],
+                            effect: match[10],
+                            text: match[11]
+                        });
+                    }
+                }
+            }
+            
+            parsedData.header = headerLines.join('\n');
+        }
+
+        function extractSRT(source) {
+            parsedData.entries = [];
+            parsedData.header = '';
+            
+            // Нормализуем переносы строк
+            const normalized = source.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            const blocks = normalized.split(/\n\n+/);
+            
+            for (const block of blocks) {
+                const lines = block.trim().split('\n');
+                if (lines.length >= 3) {
+                    const index = lines[0].trim();
+                    const timeMatch = lines[1].match(/(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})/);
+                    
+                    if (timeMatch) {
+                        const text = lines.slice(2).join('\\N'); // Используем \N как разделитель многострочного текста
+                        parsedData.entries.push({
+                            index: index,
+                            start: timeMatch[1],
+                            end: timeMatch[2],
+                            text: text
+                        });
+                    }
+                }
+            }
+        }
+
+        function mergeText() {
+            const translatedText = document.getElementById('extractedText').value;
+            
+            if (!translatedText.trim()) {
+                alert('Вставьте переведённый текст во второе поле!');
+                return;
+            }
+            
+            if (parsedData.entries.length === 0) {
+                alert('Сначала извлеките текст из субтитров!');
+                return;
+            }
+
+            const translatedLines = translatedText.split('\n');
+            
+            if (translatedLines.length !== parsedData.entries.length) {
+                if (!confirm(`Количество строк не совпадает!\nОригинал: ${parsedData.entries.length}\nПеревод: ${translatedLines.length}\n\nПродолжить?`)) {
+                    return;
+                }
+            }
+
+            let result = '';
+
+            if (parsedData.format === 'ass') {
+                result = mergeASS(translatedLines);
+            } else if (parsedData.format === 'srt') {
+                result = mergeSRT(translatedLines);
+            }
+
+            document.getElementById('resultText').value = result;
+            document.getElementById('resultStatus').textContent = 'готово ✓';
+            document.getElementById('resultStatus').className = 'text-green-400';
+        }
+
+        function mergeASS(translatedLines) {
+            let result = parsedData.header + '\n';
+            
+            for (let i = 0; i < parsedData.entries.length; i++) {
+                const entry = parsedData.entries[i];
+                const newText = translatedLines[i] !== undefined ? translatedLines[i] : entry.text;
+                
+                result += `${entry.type}: ${entry.layer},${entry.start},${entry.end},${entry.style},${entry.name},${entry.marginL},${entry.marginR},${entry.marginV},${entry.effect},${newText}\n`;
+            }
+            
+            return result.trim();
+        }
+
+        function mergeSRT(translatedLines) {
+            let result = '';
+            
+            for (let i = 0; i < parsedData.entries.length; i++) {
+                const entry = parsedData.entries[i];
+                const newText = translatedLines[i] !== undefined ? translatedLines[i] : entry.text;
+                
+                // Конвертируем \N обратно в переносы строк
+                const displayText = newText.replace(/\\N/g, '\n');
+                
+                result += `${entry.index}\n${entry.start} --> ${entry.end}\n${displayText}\n\n`;
+            }
+            
+            return result.trim();
+        }
+
+        function copyToClipboard(elementId) {
+            const textarea = document.getElementById(elementId);
+            textarea.select();
+            document.execCommand('copy');
+            
+            // Показываем уведомление
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = '✓ Скопировано!';
+            setTimeout(() => {
+                btn.textContent = originalText;
+            }, 1500);
+        }
+
+        function downloadResult() {
+            const result = document.getElementById('resultText').value;
+            if (!result.trim()) {
+                alert('Нет результата для скачивания!');
+                return;
+            }
+
+            const extension = parsedData.format === 'srt' ? 'srt' : 'ass';
+            const blob = new Blob([result], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `translated_subtitles.${extension}`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function clearField(field) {
+            if (field === 'source') {
+                document.getElementById('sourceText').value = '';
+                document.getElementById('detectedFormat').textContent = 'не определён';
+                document.getElementById('detectedFormat').className = 'text-yellow-400';
+                parsedData = { format: null, header: '', entries: [], originalLineCount: 0 };
+            } else if (field === 'extracted') {
+                document.getElementById('extractedText').value = '';
+                updateLineCount();
+            }
+        }
+    </script>
+</body>
+</html>
