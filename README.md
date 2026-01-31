@@ -23,3 +23,6 @@
 [Mikrotik в одну строку](mikrotik-line.htm)
 
 [git diff с допущениями](diff.htm)
+
+[Убрать-приклеить время к субтитрам](ass-subtitles.htm)
+
