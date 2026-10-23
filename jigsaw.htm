@@ -598,16 +598,66 @@ function pointInPoly(x, y, poly) {
   }
   return inside;
 }
+
+function distSqToSegment(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return (px - x1) * (px - x1) + (py - y1) * (py - y1);
+  let t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  const projX = x1 + t * dx, projY = y1 + t * dy;
+  return (px - projX) * (px - projX) + (py - projY) * (py - projY);
+}
+
+function distSqToPolyOutline(x, y, poly) {
+  let minD = Infinity;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const d = distSqToSegment(x, y, poly[j].x, poly[j].y, poly[i].x, poly[i].y);
+    if (d < minD) minD = d;
+  }
+  return minD;
+}
+
+/* Двухэтапная проверка клика с равномерной обводкой */
 function hitTest(wx, wy) {
+  // Этап 1: Проверка точного попадания (100% форма) сверху вниз по z-индексу[cite: 1].
+  // Если курсор попадает на кусочек сквозь вырез верхнего лежащего кусочка,
+  // выбирается именно нижний кусочек[cite: 1].
+  for (let i = loose.length - 1; i >= 0; i--) {
+    const p = loose[i], dx = wx - p.x, dy = wy - p.y; //[cite: 1]
+    const R = Math.max(p.bw, p.bh) * .85; //[cite: 1]
+    if (Math.abs(dx) > R || Math.abs(dy) > R) continue; //[cite: 1]
+    const ang = -p.rot * Math.PI / 2, c = Math.cos(ang), s = Math.sin(ang); //[cite: 1]
+    const lx = dx * c - dy * s; //[cite: 1]
+    const ly = dx * s + dy * c; //[cite: 1]
+    if (pointInPoly(lx, ly, p.poly)) return p; //[cite: 1]
+  }
+
+  // Этап 2: Клик пришелся в пустоту — ищем кусочек, чей контур находится в пределах обводки 75 пикселей.
+  const PADDING = 75;
+  const PADDING_SQ = PADDING * PADDING;
+  let bestPiece = null;
+  let bestDistSq = Infinity;
+
   for (let i = loose.length - 1; i >= 0; i--) {
     const p = loose[i], dx = wx - p.x, dy = wy - p.y;
-    const R = Math.max(p.bw, p.bh) * .85;
+    const R = Math.max(p.bw, p.bh) * .85 + PADDING;
     if (Math.abs(dx) > R || Math.abs(dy) > R) continue;
+
     const ang = -p.rot * Math.PI / 2, c = Math.cos(ang), s = Math.sin(ang);
-    if (pointInPoly(dx * c - dy * s, dx * s + dy * c, p.poly)) return p;
+    const lx = dx * c - dy * s;
+    const ly = dx * s + dy * c;
+
+    const dSq = distSqToPolyOutline(lx, ly, p.poly);
+    if (dSq <= PADDING_SQ && dSq < bestDistSq) {
+      bestDistSq = dSq;
+      bestPiece = p;
+    }
   }
-  return null;
+
+  return bestPiece;
 }
+
 
 function bringGroupToTop(group) {
   const set = new Set(group.pieces);
