@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Генератор пазлов</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:radial-gradient(ellipse at center,#2c3e50 0%,#151d27 75%,#0d131a 100%);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#e5e7eb;-webkit-user-select:none;user-select:none;overscroll-behavior:none}
+  #cv{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+  .glass{background:rgba(17,24,39,.78);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.12)}
+  .hide{display:none!important}
+  .btn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:.75rem;padding:.55rem .8rem;font-size:.9rem;transition:background .15s;touch-action:manipulation;cursor:pointer}
+  .btn:hover{background:rgba(255,255,255,.16)}
+  .btn-primary{background:linear-gradient(135deg,#f59e0b,#ef4444);border:none;border-radius:.75rem;padding:.6rem .8rem;font-weight:600;color:#fff;cursor:pointer;touch-action:manipulation}
+  .btn-primary:hover{filter:brightness(1.1)}
+  .mi{display:flex;align-items:center;gap:.6rem;width:100%;text-align:left;padding:.65rem .9rem;font-size:.92rem;cursor:pointer;touch-action:manipulation}
+  .mi:hover{background:rgba(255,255,255,.08)}
+  .mi .ck{margin-left:auto;opacity:.9;color:#fbbf24;font-weight:700}
+  input[type=range]{accent-color:#f59e0b}
+  input[type=checkbox]{accent-color:#f59e0b}
+  .tab-btn{flex:1;padding:.5rem;border-radius:.6rem;font-size:.85rem;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.05);cursor:pointer;transition:all .15s}
+  .tab-btn.active{background:rgba(245,158,11,.25);border-color:#f59e0b;color:#fbbf24;font-weight:600}
+  #toast{transition:opacity .3s}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<!-- HUD -->
+<div class="fixed top-3 left-3 glass rounded-xl px-3 py-2 text-sm flex gap-4 items-center pointer-events-none z-10">
+  <span>🧩 <b id="cnt">0 / 0</b></span>
+  <span>⏱ <b id="tmr">00:00</b></span>
+</div>
+
+<!-- Menu button -->
+<button id="menuBtn" class="fixed top-3 right-3 w-11 h-11 rounded-full glass text-xl font-bold z-20 hover:bg-white/10" title="Меню и подсказки">?</button>
+<div id="menu" class="fixed top-16 right-3 glass rounded-xl w-80 max-w-[calc(100vw-1.5rem)] overflow-hidden z-20 shadow-2xl hide">
+  <button class="mi" data-act="new">🆕 <span>Новая игра…</span></button>
+  <button class="mi" data-act="upload">📁 <span>Загрузить свою картинку…</span></button>
+  <div class="h-px bg-white/10"></div>
+  <button class="mi" data-act="join">🔗 <span>Склейка соседних вне поля</span><span class="ck" id="ckJoin">✓</span></button>
+  <button class="mi" data-act="show">🖼️ <span>Показать картинку</span></button>
+  <button class="mi" data-act="ghost">🌫️ <span>Картинка под полем</span><span class="ck" id="ckGhost"></span></button>
+  <button class="mi" data-act="edges">✂️ <span>Границы кусочков</span><span class="ck" id="ckEdges"></span></button>
+  <button class="mi" data-act="hint">💡 <span>Подсказать фрагмент</span></button>
+  <button class="mi" data-act="fit">🔍 <span>Показать всё поле</span></button>
+  <div class="h-px bg-white/10"></div>
+  <div class="px-4 py-3 text-xs text-gray-300 leading-relaxed">
+    <b class="text-gray-100">Мышь:</b> зажать и тянуть: двигать кусочек (или группу) · двойной клик: поворот ↻ · правая кнопка: поворот ↺ · колесо: масштаб · тянуть пустое место: сдвиг поля<br>
+    <b class="text-gray-100">Тач:</b> палец: двигать кусочек · двойной тап: поворот ↻ · два пальца: сдвиг и масштаб · удержать 1 с, затем вести: сдвиг поля<br>
+    <b class="text-gray-100">Склейка:</b> отпущенные рядом кусочки сцепляются в общий блок
+  </div>
+</div>
+
+<!-- Zoom -->
+<div class="fixed bottom-3 right-3 glass rounded-xl flex items-center z-10 text-sm overflow-hidden">
+  <button id="zOut" class="w-10 h-10 hover:bg-white/10 text-lg">−</button>
+  <span id="zLbl" class="w-14 text-center tabular-nums">100%</span>
+  <button id="zIn" class="w-10 h-10 hover:bg-white/10 text-lg">+</button>
+  <button id="zFit" class="w-10 h-10 hover:bg-white/10" title="Показать всё">⤢</button>
+</div>
+
+<!-- Picture overlay -->
+<div id="picOv" class="fixed inset-0 z-30 flex flex-col items-center justify-center hide" style="background:rgba(5,8,12,.94)">
+  <canvas id="picCv" class="rounded-lg shadow-2xl"></canvas>
+  <div class="mt-3 text-sm text-gray-300">Нажмите в любом месте, чтобы продолжить</div>
+</div>
+
+<!-- New game dialog -->
+<div id="dlg" class="fixed inset-0 z-40 flex items-center justify-center p-3 hide" style="background:rgba(0,0,0,.6)">
+  <div class="glass rounded-2xl p-5 w-full max-w-md shadow-2xl overflow-auto" style="max-height:96vh;touch-action:pan-y">
+    <h2 id="dlgTitle" class="text-lg font-semibold mb-3">Новый пазл</h2>
+    <div id="prevBox" class="rounded-xl overflow-hidden flex items-center justify-center mb-3" style="height:200px;background:rgba(0,0,0,.3)">
+      <canvas id="prev"></canvas>
+    </div>
+    <div class="flex gap-2 mb-3">
+      <button id="rndBtn" class="btn flex-1">🎲 Случайная</button>
+      <button id="upBtn" class="btn flex-1">📁 Своя картинка</button>
+    </div>
+
+    <div class="mb-3">
+      <div class="text-xs text-gray-300 mb-1.5 font-medium">Стиль формы деталей:</div>
+      <div class="flex gap-2">
+        <button id="modeTabs" class="tab-btn active" type="button">🧩 Выступы (Jigsaw)</button>
+        <button id="modePoly" class="tab-btn" type="button">📐 Многоугольники</button>
+      </div>
+    </div>
+
+    <label class="block mb-2.5">
+      <div class="flex justify-between text-sm mb-1"><span>Кусочков по горизонтали</span><b id="colsV">4</b></div>
+      <input type="range" id="colsR" min="2" max="20" value="4" class="w-full">
+    </label>
+    <label class="block mb-2">
+      <div class="flex justify-between text-sm mb-1"><span>Кусочков по вертикали</span><b id="rowsV">3</b></div>
+      <input type="range" id="rowsR" min="2" max="20" value="4" class="w-full">
+    </label>
+    <div class="text-sm text-gray-300 mb-3">Всего кусочков: <b id="totV" class="text-white">12</b></div>
+    <label class="flex items-center gap-2 mb-3 cursor-pointer">
+      <input type="checkbox" id="rotC" class="w-5 h-5" checked>
+      <span class="text-sm">Кусочки повёрнуты, их можно вращать</span>
+    </label>
+
+    <!-- Slider for Tabs -->
+    <div id="tabWrap" class="block mb-2">
+      <div class="flex justify-between text-sm mb-1"><span>Размер петли выступов</span><b id="tabV">30%</b></div>
+      <input type="range" id="tabR" min="15" max="50" value="32" class="w-full">
+      <div class="flex justify-between text-xs text-gray-400 mt-1"><span>аккуратные</span><span>крупные ушки (до 50%)</span></div>
+    </div>
+
+    <!-- Slider for Polygons -->
+    <div id="polyWrap" class="block mb-2 hide">
+      <div class="flex justify-between text-sm mb-1"><span>Близость к прямоугольникам</span><b id="irrV">70%</b></div>
+      <input type="range" id="irrR" min="0" max="100" value="40" class="w-full">
+      <div class="flex justify-between text-xs text-gray-400 mt-1"><span>прямоугольники</span><span>многоугольники</span></div>
+    </div>
+
+    <div class="flex gap-2 mt-5">
+      <button id="cancelBtn" class="btn flex-1">Отмена</button>
+      <button id="startBtn" class="btn-primary flex-1">Начать</button>
+    </div>
+  </div>
+</div>
+
+<!-- Win -->
+<div id="win" class="fixed inset-0 z-40 flex items-center justify-center p-3 hide" style="background:rgba(0,0,0,.45)">
+  <div class="glass rounded-2xl p-6 text-center shadow-2xl max-w-sm w-full">
+    <div class="text-5xl mb-2">🎉</div>
+    <h2 class="text-xl font-semibold mb-1">Пазл собран!</h2>
+    <p id="winTxt" class="text-gray-300 mb-5 text-sm"></p>
+    <div class="flex gap-2">
+      <button id="winClose" class="btn flex-1">Любоваться</button>
+      <button id="winNew" class="btn-primary flex-1">Новая игра</button>
+    </div>
+  </div>
+</div>
+
+<!-- Drop overlay -->
+<div id="dropOv" class="fixed inset-3 z-50 rounded-3xl flex items-center justify-center text-2xl font-semibold pointer-events-none hide" style="border:3px dashed #fbbf24;background:rgba(251,191,36,.12)">
+  📥 Отпустите картинку, чтобы собрать её
+</div>
+
+<div id="toast" class="fixed bottom-16 left-1/2 -translate-x-1/2 glass rounded-xl px-4 py-2 text-sm z-50 pointer-events-none" style="opacity:0"></div>
+<input type="file" id="file" accept="image/*" class="hide">
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const cv = $('#cv'), ctx = cv.getContext('2d');
+let DPR = 1, VW = 0, VH = 0;
+
+const rand = (a = 1, b) => b === undefined ? Math.random() * a : a + Math.random() * (b - a);
+const randi = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const mkCanvas = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); return c; };
+
+let toastT = null;
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.style.opacity = 1; clearTimeout(toastT); toastT = setTimeout(() => t.style.opacity = 0, 1800); }
+
+/* ================= Генератор случайного арта ================= */
+const rcolor = (a = 1) => `hsla(${rand(360) | 0},${randi(55, 95)}%,${randi(35, 70)}%,${a})`;
+const SHAPES = ['circle', 'ellipse', 'rect', 'square', 'triangle', 'star', 'poly', 'ring', 'cross'];
+function shapePath(g, type, s) {
+  g.beginPath();
+  switch (type) {
+    case 'circle': g.arc(0, 0, s, 0, Math.PI * 2); break;
+    case 'ellipse': g.ellipse(0, 0, s, s * rand(.4, .75), 0, 0, Math.PI * 2); break;
+    case 'rect': g.rect(-s, -s * .6, 2 * s, 1.2 * s); break;
+    case 'square': g.rect(-s * .8, -s * .8, 1.6 * s, 1.6 * s); break;
+    case 'triangle': for (let i = 0; i < 3; i++) { const a = -Math.PI / 2 + i * 2 * Math.PI / 3; g.lineTo(Math.cos(a) * s, Math.sin(a) * s); } g.closePath(); break;
+    case 'star': { const n = randi(5, 8); for (let i = 0; i < 2 * n; i++) { const a = -Math.PI / 2 + i * Math.PI / n, r = i % 2 ? s * .45 : s; g.lineTo(Math.cos(a) * r, Math.sin(a) * r); } g.closePath(); break; }
+    case 'poly': { const n = randi(5, 8); for (let i = 0; i < n; i++) { const a = i * 2 * Math.PI / n; g.lineTo(Math.cos(a) * s, Math.sin(a) * s); } g.closePath(); break; }
+    case 'ring': g.arc(0, 0, s, 0, Math.PI * 2); g.moveTo(s * .6, 0); g.arc(0, 0, s * .6, 0, Math.PI * 2, true); break;
+    case 'cross': { const t = s * .33; g.rect(-s, -t, 2 * s, 2 * t); g.rect(-t, -s, 2 * t, s - t); g.rect(-t, t, 2 * t, s - t); break; }
+  }
+}
+function drawShape(g, x, y, s, a) {
+  g.save(); g.translate(x, y); g.rotate(rand(Math.PI * 2));
+  shapePath(g, pick(SHAPES), s);
+  if (Math.random() < .35) { const gr = g.createLinearGradient(-s, -s, s, s); gr.addColorStop(0, rcolor(a)); gr.addColorStop(1, rcolor(a)); g.fillStyle = gr; }
+  else g.fillStyle = rcolor(a);
+  g.shadowColor = 'rgba(0,0,0,.3)'; g.shadowBlur = s * .15;
+  g.fill('evenodd');
+  g.shadowColor = 'transparent';
+  if (Math.random() < .4) { g.lineWidth = Math.max(2, s * rand(.03, .08)); g.lineJoin = 'round'; g.strokeStyle = Math.random() < .5 ? 'rgba(255,255,255,.85)' : 'rgba(0,0,0,.55)'; g.stroke(); }
+  g.restore();
+}
+function makeRandomImage() {
+  const land = innerWidth >= innerHeight;
+  const L = 1600, S = randi(1000, 1250);
+  const w = land ? L : S, h = land ? S : L;
+  const c = mkCanvas(w, h), g = c.getContext('2d');
+  const h0 = rand(360), ang = rand(Math.PI * 2), R = Math.hypot(w, h) / 2;
+  const lg = g.createLinearGradient(w / 2 - Math.cos(ang) * R, h / 2 - Math.sin(ang) * R, w / 2 + Math.cos(ang) * R, h / 2 + Math.sin(ang) * R);
+  lg.addColorStop(0, `hsl(${h0},${randi(60, 90)}%,${randi(45, 65)}%)`);
+  lg.addColorStop(.5, `hsl(${h0 + rand(40, 120)},${randi(50, 90)}%,${randi(35, 60)}%)`);
+  lg.addColorStop(1, `hsl(${h0 + rand(140, 240)},${randi(60, 90)}%,${randi(30, 55)}%)`);
+  g.fillStyle = lg; g.fillRect(0, 0, w, h);
+  const gx = rand(w), gy = rand(h), rg = g.createRadialGradient(gx, gy, 0, gx, gy, R * rand(.5, 1));
+  rg.addColorStop(0, 'rgba(255,255,255,.35)'); rg.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = rg; g.fillRect(0, 0, w, h);
+  const m = Math.min(w, h);
+  g.lineCap = 'round';
+  for (let i = randi(2, 5); i > 0; i--) {
+    g.beginPath(); g.moveTo(rand(w), rand(h));
+    g.bezierCurveTo(rand(w), rand(h), rand(w), rand(h), rand(w), rand(h));
+    g.lineWidth = rand(.01, .035) * m; g.strokeStyle = rcolor(rand(.5, .9)); g.stroke();
+  }
+  for (let i = randi(5, 8); i > 0; i--) drawShape(g, rand(w), rand(h), rand(.12, .32) * m, rand(.65, .95));
+  for (let i = randi(14, 22); i > 0; i--) drawShape(g, rand(w), rand(h), rand(.04, .1) * m, rand(.7, 1));
+  for (let i = randi(40, 70); i > 0; i--) drawShape(g, rand(w), rand(h), rand(.008, .025) * m, rand(.7, 1));
+  return c;
+}
+
+/* ================= Построение разрезов =================
+   1) Классические Jigsaw выступы/пазы:
+      Оригинальный алгоритм из версии Jigsaw без изменений (makeTabEdgePoints).
+   2) Ломаные линии (многоугольники):
+      Алгоритм из версии «Ломаные линии» с деформацией сетки и безопасными границами разрезов. */
+
+function makeTabEdgePoints(A, B, sign, tabRatio) {
+  const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy);
+  const ux = dx / L, uy = dy / L;
+  const nx = -uy * sign, ny = ux * sign;
+  const pt = (s, h) => ({ x: A.x + ux * (s * L) + nx * (h * L), y: A.y + uy * (s * L) + ny * (h * L) });
+
+  const cubic = (p0, c1, c2, p1, steps = 5) => {
+    const res = [];
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps, it = 1 - t;
+      const s = it * it * it * p0.s + 3 * it * it * t * c1.s + 3 * it * t * t * c2.s + t * t * t * p1.s;
+      const h = it * it * it * p0.h + 3 * it * it * t * c1.h + 3 * it * t * t * c2.h + t * t * t * p1.h;
+      res.push(pt(s, h));
+    }
+    return res;
+  };
+
+  const pts = [pt(0, 0), pt(0.35, 0)];
+  // 1. Шейка (сужение к основанию)
+  pts.push(...cubic({ s: 0.35, h: 0 }, { s: 0.38, h: 0.05 * tabRatio }, { s: 0.35, h: 0.30 * tabRatio }, { s: 0.31, h: 0.42 * tabRatio }));
+  // 2. Головка (круглое ушко)
+  pts.push(...cubic({ s: 0.31, h: 0.42 * tabRatio }, { s: 0.24, h: 0.68 * tabRatio }, { s: 0.36, h: 1.05 * tabRatio }, { s: 0.50, h: 1.05 * tabRatio }));
+  // 3. Вторая половина головки
+  pts.push(...cubic({ s: 0.50, h: 1.05 * tabRatio }, { s: 0.64, h: 1.05 * tabRatio }, { s: 0.76, h: 0.68 * tabRatio }, { s: 0.69, h: 0.42 * tabRatio }));
+  // 4. Возврат к линии
+  pts.push(...cubic({ s: 0.69, h: 0.42 * tabRatio }, { s: 0.65, h: 0.30 * tabRatio }, { s: 0.62, h: 0.05 * tabRatio }, { s: 0.65, h: 0 }));
+  pts.push(pt(1, 0));
+  return pts;
+}
+
+function generateCuts(cols, rows, style = 'tabs', param = 0.30) {
+  const H = [], V = [];
+  if (style === 'tabs') {
+    const tabRatio = param;
+    for (let r = 0; r <= rows; r++) {
+      H[r] = [];
+      for (let c = 0; c < cols; c++) {
+        const A = { x: c, y: r }, B = { x: c + 1, y: r };
+        if (r === 0 || r === rows) H[r][c] = [A, B];
+        else {
+          const sign = Math.random() < 0.5 ? 1 : -1;
+          H[r][c] = makeTabEdgePoints(A, B, sign, tabRatio);
+        }
+      }
+    }
+    for (let r = 0; r < rows; r++) {
+      V[r] = [];
+      for (let c = 0; c <= cols; c++) {
+        const A = { x: c, y: r }, B = { x: c, y: r + 1 };
+        if (c === 0 || c === cols) V[r][c] = [A, B];
+        else {
+          const sign = Math.random() < 0.5 ? 1 : -1;
+          V[r][c] = makeTabEdgePoints(A, B, sign, tabRatio);
+        }
+      }
+    }
+  } else {
+    // Алгоритм нарезки "Ломаные линии" из соответствующего вложения
+    const irr = param;
+    const P = [];
+
+    // 1. Узлы сетки со случайным смещением (внутренние смещаются, края строго прямые)
+    for (let r = 0; r <= rows; r++) {
+      P[r] = [];
+      for (let c = 0; c <= cols; c++) {
+        let px = c, py = r;
+        if (irr > 0.001) {
+          const k = irr * 0.36;
+          if (c > 0 && c < cols) px += (Math.random() * 2 - 1) * k;
+          if (r > 0 && r < rows) py += (Math.random() * 2 - 1) * k;
+          px = clamp(px, c - 0.42, c + 0.42);
+          py = clamp(py, r - 0.42, r + 0.42);
+        }
+        P[r][c] = { x: px, y: py };
+      }
+    }
+
+    // 2. Горизонтальные ребра
+    for (let r = 0; r <= rows; r++) {
+      H[r] = [];
+      for (let c = 0; c < cols; c++) {
+        const a = P[r][c], b = P[r][c + 1];
+        if (r === 0 || r === rows) {
+          H[r][c] = [{ x: a.x, y: a.y }, { x: b.x, y: b.y }];
+        } else {
+          const nPt = 3 + Math.round(irr * 4);
+          const pts = [{ x: a.x, y: a.y }];
+          for (let k = 1; k < nPt; k++) {
+            const t = k / nPt;
+            let px = a.x + (b.x - a.x) * t + (Math.random() * 2 - 1) * irr * 0.12;
+            let py = a.y + (b.y - a.y) * t + (Math.random() * 2 - 1) * irr * 0.42;
+            py = clamp(py, r - 0.45, r + 0.45);
+            pts.push({ x: px, y: py });
+          }
+          pts.push({ x: b.x, y: b.y });
+          H[r][c] = pts;
+        }
+      }
+    }
+
+    // 3. Вертикальные ребра
+    for (let r = 0; r < rows; r++) {
+      V[r] = [];
+      for (let c = 0; c <= cols; c++) {
+        const a = P[r][c], b = P[r + 1][c];
+        if (c === 0 || c === cols) {
+          V[r][c] = [{ x: a.x, y: a.y }, { x: b.x, y: b.y }];
+        } else {
+          const nPt = 3 + Math.round(irr * 4);
+          const pts = [{ x: a.x, y: a.y }];
+          for (let k = 1; k < nPt; k++) {
+            const t = k / nPt;
+            let px = a.x + (b.x - a.x) * t + (Math.random() * 2 - 1) * irr * 0.42;
+            let py = a.y + (b.y - a.y) * t + (Math.random() * 2 - 1) * irr * 0.12;
+            px = clamp(px, c - 0.45, c + 0.45);
+            pts.push({ x: px, y: py });
+          }
+          pts.push({ x: b.x, y: b.y });
+          V[r][c] = pts;
+        }
+      }
+    }
+  }
+  return { cols, rows, style, param, H, V };
+}
+
+function piecePolyUnit(cuts, r, c) {
+  const out = [];
+  const add = pts => { for (let i = 0; i < pts.length - 1; i++) out.push(pts[i]); };
+  add(cuts.H[r][c]);
+  add(cuts.V[r][c + 1]);
+  add(cuts.H[r + 1][c].slice().reverse());
+  add(cuts.V[r][c].slice().reverse());
+  return out;
+}
+
+function edgesPath(cuts, sx, sy) {
+  const p = new Path2D();
+  const add = pts => { p.moveTo(pts[0].x * sx, pts[0].y * sy); for (let i = 1; i < pts.length; i++) p.lineTo(pts[i].x * sx, pts[i].y * sy); };
+  cuts.H.forEach(row => row.forEach(add));
+  cuts.V.forEach(row => row.forEach(add));
+  return p;
+}
+
+/* ================= Состояние игры ================= */
+let game = null, loose = [], hint = null, flashes = [];
+let showGhost = false, showEdges = false, joinNearby = true;
+const view = { x: 0, y: 0, s: 1 };
+let baseScale = 1;
+
+function makeGhost(src) {
+  const f = 5, sw = Math.max(1, Math.round(src.width / f)), sh = Math.max(1, Math.round(src.height / f));
+  const c = mkCanvas(sw, sh), g = c.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(src, 0, 0, sw, sh);
+  try {
+    const d = g.getImageData(0, 0, sw, sh), a = d.data;
+    for (let i = 0; i < a.length; i += 4) { const v = (a[i] * .3 + a[i + 1] * .59 + a[i + 2] * .11) * .8 + 40; a[i] = a[i + 1] = a[i + 2] = v; }
+    g.putImageData(d, 0, 0);
+  } catch (e) { }
+  return c;
+}
+
+function makeBitmap(p, src, cell) {
+  const pad = Math.ceil(cell * 0.12) + 6;
+  const c = mkCanvas(Math.ceil(p.bw + pad * 2), Math.ceil(p.bh + pad * 2)), g = c.getContext('2d');
+  const ox = c.width / 2, oy = c.height / 2;
+  g.translate(ox, oy);
+  g.save();
+  g.shadowColor = 'rgba(0,0,0,.65)'; g.shadowBlur = pad * .75; g.shadowOffsetY = pad * .15;
+  g.fillStyle = '#000'; g.fill(p.path);
+  g.restore();
+  g.save(); g.clip(p.path);
+  const sx0 = Math.max(0, Math.floor(p.cx - ox)), sy0 = Math.max(0, Math.floor(p.cy - oy));
+  const sx1 = Math.min(src.width, Math.ceil(p.cx + ox)), sy1 = Math.min(src.height, Math.ceil(p.cy + oy));
+  if (sx1 > sx0 && sy1 > sy0) g.drawImage(src, sx0, sy0, sx1 - sx0, sy1 - sy0, sx0 - p.cx, sy0 - p.cy, sx1 - sx0, sy1 - sy0);
+  g.lineWidth = Math.max(1.5, cell * .025); g.strokeStyle = 'rgba(255,255,255,.32)'; g.lineJoin = 'round';
+  g.stroke(p.path);
+  g.restore();
+  g.lineWidth = Math.max(1, cell * .008); g.strokeStyle = 'rgba(0,0,0,.55)'; g.lineJoin = 'round';
+  g.stroke(p.path);
+  p.bmp = c; p.ox = ox; p.oy = oy; p.rad = Math.hypot(c.width, c.height) / 2;
+}
+
+function startGame({ img, isUser, cols, rows, rotation, cuts }) {
+  const long = Math.max(img.width, img.height);
+  const k = clamp(long, 1000, 2000) / long;
+  const W = Math.round(img.width * k), H = Math.round(img.height * k);
+  const src = mkCanvas(W, H), sg = src.getContext('2d');
+  sg.imageSmoothingQuality = 'high'; sg.drawImage(img, 0, 0, W, H);
+  if (!cuts || cuts.cols !== cols || cuts.rows !== rows) cuts = generateCuts(cols, rows, 'tabs', 0.30);
+  const cw = W / cols, ch = H / rows, cell = Math.min(cw, ch);
+  const layer = mkCanvas(W, H);
+  const pieces = [];
+
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const pts = piecePolyUnit(cuts, r, c).map(p => ({ x: p.x * cw, y: p.y * ch }));
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    pts.forEach(p => { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); });
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    const poly = pts.map(p => ({ x: p.x - cx, y: p.y - cy }));
+    const path = new Path2D();
+    poly.forEach((p, i) => i ? path.lineTo(p.x, p.y) : path.moveTo(p.x, p.y));
+    path.closePath();
+    const piece = { r, c, poly, path, bw: x1 - x0, bh: y1 - y0, cx, cy, x: cx, y: cy, rot: 0, a: 0, placed: false, group: null };
+    piece.group = { pieces: [piece] };
+    makeBitmap(piece, src, cell);
+    if (rotation) { piece.rot = randi(0, 3); piece.a = piece.rot * Math.PI / 2; }
+    pieces.push(piece);
+  }
+
+  shuffle(pieces);
+  layoutPieces(pieces, W, H, rotation);
+  game = {
+    img, isUser, cols, rows, rotation, W, H, cw, ch, cell, src, ghost: makeGhost(src),
+    layer, layerCtx: layer.getContext('2d'), edges: edgesPath(cuts, cw, ch),
+    total: pieces.length, placed: 0, start: performance.now(), done: false, endTime: 0
+  };
+  loose = pieces; hint = null; flashes = [];
+  $('#win').classList.add('hide');
+  computeBase(); fitView(); updateHUD(); requestRender();
+}
+
+/* Раскладка по краям поля рядами, каждый кусочек перекрывает соседа на 40% */
+function layoutPieces(list, W, H, rotation) {
+  let mw = 0, mh = 0;
+  list.forEach(p => {
+    if (rotation) { const m = Math.max(p.bw, p.bh); mw = Math.max(mw, m); mh = mw; }
+    else { mw = Math.max(mw, p.bw); mh = Math.max(mh, p.bh); }
+  });
+  const gap = Math.min(mw, mh) * .3, rowH = mh * 1.06, colW = mw * 1.06;
+  const stepX = mw * .6, stepY = mh * .6;
+  let idx = 0, k = 0;
+  while (idx < list.length && k < 200) {
+    const ty = -(gap + mh / 2 + k * rowH), by = H + gap + mh / 2 + k * rowH;
+    const lx = -(gap + mw / 2 + k * colW), rx = W + gap + mw / 2 + k * colW;
+    const yS = -gap - k * rowH + mh * .55, yE = H + gap + k * rowH - mh * .55;
+    const sides = [
+      { ox: lx, oy: ty, dx: 1, dy: 0, len: rx - lx, step: stepX },
+      { ox: rx, oy: yS, dx: 0, dy: 1, len: yE - yS, step: stepY },
+      { ox: rx, oy: by, dx: -1, dy: 0, len: rx - lx, step: stepX },
+      { ox: lx, oy: yE, dx: 0, dy: -1, len: yE - yS, step: stepY },
+    ];
+    sides.forEach(s => s.cap = s.len < 0 ? 0 : Math.floor(s.len / s.step + 1e-6) + 1);
+    const total = sides.reduce((a, s) => a + s.cap, 0), remain = list.length - idx;
+    let counts;
+    if (remain >= total) counts = sides.map(s => s.cap);
+    else {
+      const raw = sides.map(s => s.cap * remain / total);
+      counts = raw.map(Math.floor);
+      let left = remain - counts.reduce((a, b) => a + b, 0);
+      const order = raw.map((v, i) => [v - Math.floor(v), i]).sort((a, b) => b[0] - a[0]);
+      for (let j = 0; left > 0; j = (j + 1) % 4) { const i = order[j][1]; if (counts[i] < sides[i].cap) { counts[i]++; left--; } }
+    }
+    sides.forEach((s, i) => {
+      const n = counts[i]; if (!n) return;
+      const off = (s.len - (n - 1) * s.step) / 2;
+      for (let j = 0; j < n && idx < list.length; j++) {
+        const d = off + j * s.step, p = list[idx++];
+        p.x = s.ox + s.dx * d; p.y = s.oy + s.dy * d;
+      }
+    });
+    k++;
+  }
+}
+
+/* ================= Камера ================= */
+function computeBase() { if (game) baseScale = Math.min(VW / game.W, VH / game.H) * .9; }
+function updateZoomLabel() { $('#zLbl').textContent = Math.round(view.s / baseScale * 100) + '%'; }
+function setScale(ns, px, py) {
+  ns = clamp(ns, baseScale * .3, baseScale * 3);
+  const wx = (px - view.x) / view.s, wy = (py - view.y) / view.s;
+  view.s = ns; view.x = px - wx * ns; view.y = py - wy * ns;
+  updateZoomLabel(); requestRender();
+}
+function fitView() {
+  if (!game) return;
+  let x0 = 0, y0 = 0, x1 = game.W, y1 = game.H;
+  loose.forEach(p => { const r = Math.max(p.bw, p.bh) / 2; x0 = Math.min(x0, p.x - r); y0 = Math.min(y0, p.y - r); x1 = Math.max(x1, p.x + r); y1 = Math.max(y1, p.y + r); });
+  const m = 16, top = 56;
+  const s = clamp(Math.min((VW - 2 * m) / (x1 - x0), (VH - top - m - 50) / (y1 - y0)), baseScale * .3, baseScale * 3);
+  view.s = s;
+  view.x = VW / 2 - (x0 + x1) / 2 * s;
+  view.y = top + (VH - top - 50) / 2 - (y0 + y1) / 2 * s;
+  updateZoomLabel(); requestRender();
+}
+const s2w = (x, y) => ({ x: (x - view.x) / view.s, y: (y - view.y) / view.s });
+function inView(wx, wy) { const x = wx * view.s + view.x, y = wy * view.s + view.y; return x > 0 && y > 0 && x < VW && y < VH; }
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2.5);
+  VW = innerWidth; VH = innerHeight;
+  cv.width = Math.round(VW * DPR); cv.height = Math.round(VH * DPR);
+  if (game) { computeBase(); setScale(view.s, VW / 2, VH / 2); }
+  requestRender();
+}
+
+/* ================= Отрисовка ================= */
+let needRender = false, lastFrame = 0, panIndicator = null;
+function requestRender() { if (!needRender) { needRender = true; requestAnimationFrame(render); } }
+function render(now) {
+  needRender = false;
+  const dt = Math.min(.05, (now - (lastFrame || now)) / 1000); lastFrame = now;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (!game) return;
+  const s = view.s, W = game.W, H = game.H;
+  let anim = false;
+  ctx.setTransform(DPR * s, 0, 0, DPR * s, DPR * view.x, DPR * view.y);
+  ctx.imageSmoothingQuality = 'high';
+
+  // Игровое поле
+  ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fillRect(0, 0, W, H);
+  if (showGhost) { ctx.globalAlpha = .6; ctx.drawImage(game.ghost, 0, 0, W, H); ctx.globalAlpha = 1; }
+  ctx.drawImage(game.layer, 0, 0);
+  ctx.lineWidth = 1.5 / s; ctx.strokeStyle = 'rgba(255,255,255,.3)';
+  ctx.setLineDash([8 / s, 5 / s]); ctx.strokeRect(0, 0, W, H); ctx.setLineDash([]);
+  if (showEdges) {
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 3 / s; ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.stroke(game.edges);
+    ctx.lineWidth = 1.1 / s; ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.stroke(game.edges);
+  }
+
+  // Подсказка места
+  const blink = .5 + .5 * Math.sin(now / 160);
+  if (hint) {
+    ctx.save(); ctx.translate(hint.cx, hint.cy);
+    ctx.fillStyle = `rgba(255,215,0,${.12 + .4 * blink})`; ctx.fill(hint.path);
+    ctx.lineWidth = 3 / s; ctx.strokeStyle = `rgba(255,215,0,${.4 + .6 * blink})`; ctx.stroke(hint.path);
+    ctx.restore(); anim = true;
+  }
+
+  // Вспышки соединения
+  flashes = flashes.filter(f => now - f.t < 650);
+  flashes.forEach(f => {
+    const a = 1 - (now - f.t) / 650;
+    ctx.save();
+    if (f.p.placed) ctx.translate(f.p.cx, f.p.cy);
+    else { ctx.translate(f.p.x, f.p.y); if (f.p.a) ctx.rotate(f.p.a); }
+    ctx.lineWidth = (2 + 6 * a) / s; ctx.strokeStyle = `rgba(255,255,255,${a})`; ctx.lineJoin = 'round'; ctx.stroke(f.p.path);
+    ctx.restore(); anim = true;
+  });
+
+  // Свободные кусочки и группы
+  const vx0 = -view.x / s, vy0 = -view.y / s, vx1 = (VW - view.x) / s, vy1 = (VH - view.y) / s;
+  const kk = 1 - Math.exp(-dt * 20);
+  for (const p of loose) {
+    const ta = p.rot * Math.PI / 2;
+    if (p.a !== ta) { const d = ta - p.a; if (Math.abs(d) < .002) p.a = ta; else { p.a += d * kk; anim = true; } }
+    if (p.x + p.rad < vx0 || p.x - p.rad > vx1 || p.y + p.rad < vy0 || p.y - p.rad > vy1) continue;
+    ctx.save(); ctx.translate(p.x, p.y); if (p.a) ctx.rotate(p.a);
+    ctx.drawImage(p.bmp, -p.ox, -p.oy);
+    if (p === hint) {
+      ctx.lineWidth = 4 / s; ctx.strokeStyle = `rgba(255,215,0,${.3 + .7 * blink})`; ctx.lineJoin = 'round'; ctx.stroke(p.path);
+    }
+    ctx.restore();
+  }
+
+  // Индикатор режима панорамирования после удержания
+  if (panIndicator) {
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.beginPath(); ctx.arc(panIndicator.x, panIndicator.y, 34, 0, Math.PI * 2);
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(251,191,36,.85)'; ctx.stroke();
+    ctx.fillStyle = 'rgba(251,191,36,.15)'; ctx.fill();
+  }
+  if (anim) requestRender();
+}
+
+/* ================= Логика кусочков и групп ================= */
+function pointInPoly(x, y, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a.y > y) !== (b.y > y) && x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+function hitTest(wx, wy) {
+  for (let i = loose.length - 1; i >= 0; i--) {
+    const p = loose[i], dx = wx - p.x, dy = wy - p.y;
+    const R = Math.max(p.bw, p.bh) * .85;
+    if (Math.abs(dx) > R || Math.abs(dy) > R) continue;
+    const ang = -p.rot * Math.PI / 2, c = Math.cos(ang), s = Math.sin(ang);
+    if (pointInPoly(dx * c - dy * s, dx * s + dy * c, p.poly)) return p;
+  }
+  return null;
+}
+
+function bringGroupToTop(group) {
+  const set = new Set(group.pieces);
+  loose = loose.filter(p => !set.has(p));
+  loose.push(...group.pieces);
+  requestRender();
+}
+
+function placeSingle(p) {
+  p.x = p.cx; p.y = p.cy; p.rot = 0; p.a = 0; p.placed = true;
+  const i = loose.indexOf(p); if (i >= 0) loose.splice(i, 1);
+  const g = game.layerCtx;
+  g.save(); g.translate(p.cx, p.cy); g.clip(p.path); g.drawImage(game.src, -p.cx, -p.cy); g.restore();
+  g.save(); g.translate(p.cx, p.cy); g.lineWidth = Math.max(.8, game.cell * .006); g.strokeStyle = 'rgba(0,0,0,.22)'; g.lineJoin = 'round'; g.stroke(p.path); g.restore();
+  flashes.push({ p, t: performance.now() });
+  game.placed++;
+}
+
+/* Примагничивание всей группы на поле */
+function checkGroupSnapToBoard(group) {
+  if (!game || !group || !group.pieces.length) return false;
+  const rep = group.pieces[0];
+  if (((rep.rot % 4) + 4) % 4 !== 0) return false;
+  const tol = .25 * (game.cw + game.ch) / 2;
+  if (Math.hypot(rep.x - rep.cx, rep.y - rep.cy) <= tol) {
+    const pieces = [...group.pieces];
+    pieces.forEach(p => placeSingle(p));
+    updateHUD();
+    if (game.placed === game.total) win();
+    requestRender();
+    return true;
+  }
+  return false;
+}
+
+/* Склейка двух соседних кусочков/групп вне игрового поля */
+function checkGroupMerge(group) {
+  if (!game || !joinNearby || !group) return;
+  const cell = (game.cw + game.ch) / 2;
+  const tol = cell * 0.25;
+  let mergedAny = false, keepChecking = true;
+
+  while (keepChecking) {
+    keepChecking = false;
+    for (const cur of group.pieces) {
+      const curRotNorm = ((cur.rot % 4) + 4) % 4;
+      for (const other of loose) {
+        if (group.pieces.includes(other)) continue;
+        const otherRotNorm = ((other.rot % 4) + 4) % 4;
+        if (curRotNorm !== otherRotNorm) continue;
+
+        const dr = other.r - cur.r, dc = other.c - cur.c;
+        if (Math.abs(dr) + Math.abs(dc) !== 1) continue;
+
+        const dx0 = other.cx - cur.cx, dy0 = other.cy - cur.cy;
+        const ang = curRotNorm * Math.PI / 2;
+        const targetDx = dx0 * Math.cos(ang) - dy0 * Math.sin(ang);
+        const targetDy = dx0 * Math.sin(ang) + dy0 * Math.cos(ang);
+
+        const actualDx = other.x - cur.x, actualDy = other.y - cur.y;
+        const err = Math.hypot(actualDx - targetDx, actualDy - targetDy);
+
+        if (err <= tol) {
+          const shiftX = (other.x - targetDx) - cur.x;
+          const shiftY = (other.y - targetDy) - cur.y;
+          group.pieces.forEach(p => {
+            p.x += shiftX; p.y += shiftY;
+            flashes.push({ p, t: performance.now() });
+          });
+
+          const otherG = other.group;
+          const combined = [...group.pieces, ...otherG.pieces];
+          const newG = { pieces: combined };
+          combined.forEach(p => p.group = newG);
+          group = newG;
+          mergedAny = true;
+          keepChecking = true;
+          toast('Кусочки соединены!');
+          break;
+        }
+      }
+      if (keepChecking) break;
+    }
+  }
+
+  if (mergedAny) {
+    checkGroupSnapToBoard(group);
+    requestRender();
+  }
+}
+
+function rotateGroup(group, pivot, dir) {
+  if (!game) return;
+  if (!game.rotation) { toast('Вращение отключено в настройках этой игры'); return; }
+  const ang = dir * Math.PI / 2;
+  const cos = Math.round(Math.cos(ang)), sin = Math.round(Math.sin(ang));
+  for (const pc of group.pieces) {
+    const rx = pc.x - pivot.x, ry = pc.y - pivot.y;
+    pc.x = pivot.x + (rx * cos - ry * sin);
+    pc.y = pivot.y + (rx * sin + ry * cos);
+    pc.rot += dir;
+  }
+  if (!checkGroupSnapToBoard(group) && joinNearby) {
+    checkGroupMerge(group);
+  }
+  requestRender();
+}
+
+/* ================= Ввод (мышь + тач) ================= */
+const pointers = new Map();
+let mode = 'none', dragTarget = null, dragOffsets = [], lpTimer = null, downInfo = null, lastTap = null, pinch = null;
+
+function startPinch() {
+  const [a, b] = [...pointers.values()];
+  const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+  pinch = { d: Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)), s: view.s, wx: (mx - view.x) / view.s, wy: (my - view.y) / view.s };
+  mode = 'pinch';
+}
+
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  closeMenu();
+  if (!game) return;
+  if (e.pointerType === 'mouse' && e.button === 2) {
+    const w = s2w(e.clientX, e.clientY), p = hitTest(w.x, w.y);
+    if (p) { bringGroupToTop(p.group); rotateGroup(p.group, p, -1); }
+    return;
+  }
+  if (e.pointerType === 'mouse' && e.button > 1) return;
+  try { cv.setPointerCapture(e.pointerId); } catch (_) { }
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (pointers.size === 1) {
+    const w = s2w(e.clientX, e.clientY);
+    const p = e.button === 1 ? null : hitTest(w.x, w.y);
+    downInfo = { x: e.clientX, y: e.clientY, t: performance.now(), piece: p };
+    if (p) {
+      bringGroupToTop(p.group);
+      dragTarget = p;
+      dragOffsets = p.group.pieces.map(pc => ({ piece: pc, dx: pc.x - w.x, dy: pc.y - w.y }));
+      mode = 'pending';
+    } else {
+      dragTarget = null; mode = 'pendingPan';
+    }
+    clearTimeout(lpTimer);
+    lpTimer = setTimeout(() => {
+      if (mode === 'pending' || mode === 'pendingPan') {
+        mode = 'pan'; dragTarget = null;
+        const pt = [...pointers.values()][0];
+        if (pt) panIndicator = { x: pt.x, y: pt.y };
+        if (navigator.vibrate) try { navigator.vibrate(25); } catch (_) { }
+        cv.style.cursor = 'move';
+        requestRender();
+      }
+    }, 1000);
+  } else if (pointers.size === 2) {
+    clearTimeout(lpTimer);
+    if (mode === 'piece' && dragTarget) {
+      if (!checkGroupSnapToBoard(dragTarget.group) && joinNearby) checkGroupMerge(dragTarget.group);
+    }
+    dragTarget = null; downInfo = null; panIndicator = null;
+    startPinch();
+  }
+});
+
+cv.addEventListener('pointermove', e => {
+  const pt = pointers.get(e.pointerId);
+  if (!pt) {
+    if (e.pointerType === 'mouse' && game) { const w = s2w(e.clientX, e.clientY); cv.style.cursor = hitTest(w.x, w.y) ? 'grab' : 'default'; }
+    return;
+  }
+  const px = pt.x, py = pt.y;
+  pt.x = e.clientX; pt.y = e.clientY;
+  const thr = e.pointerType === 'mouse' ? 3 : 8;
+  if ((mode === 'pending' || mode === 'pendingPan') && downInfo && Math.hypot(pt.x - downInfo.x, pt.y - downInfo.y) > thr) {
+    clearTimeout(lpTimer);
+    mode = mode === 'pending' ? 'piece' : 'pan';
+    cv.style.cursor = mode === 'piece' ? 'grabbing' : 'move';
+  }
+  if (mode === 'piece' && dragTarget) {
+    const w = s2w(pt.x, pt.y);
+    dragOffsets.forEach(o => { o.piece.x = w.x + o.dx; o.piece.y = w.y + o.dy; });
+    requestRender();
+  } else if (mode === 'pan') {
+    view.x += pt.x - px; view.y += pt.y - py;
+    if (panIndicator) { panIndicator.x = pt.x; panIndicator.y = pt.y; }
+    requestRender();
+  } else if (mode === 'pinch' && pointers.size >= 2) {
+    const [a, b] = [...pointers.values()];
+    const d = Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    const ns = clamp(pinch.s * d / pinch.d, baseScale * .3, baseScale * 3);
+    view.s = ns; view.x = mx - pinch.wx * ns; view.y = my - pinch.wy * ns;
+    updateZoomLabel(); requestRender();
+  }
+});
+
+function onUp(e) {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.delete(e.pointerId);
+  clearTimeout(lpTimer);
+  if (mode === 'piece' && dragTarget) {
+    const g = dragTarget.group;
+    dragTarget = null;
+    if (!checkGroupSnapToBoard(g) && joinNearby) checkGroupMerge(g);
+    mode = 'done'; requestRender();
+  } else if (mode === 'pending' && downInfo && e.type === 'pointerup') {
+    const now = performance.now(), p = downInfo.piece;
+    if (now - downInfo.t < 400) {
+      if (lastTap && lastTap.piece === p && now - lastTap.t < 420 && Math.hypot(lastTap.x - e.clientX, lastTap.y - e.clientY) < 30) {
+        rotateGroup(p.group, p, 1); lastTap = null;
+      } else lastTap = { piece: p, t: now, x: e.clientX, y: e.clientY };
+    } else lastTap = null;
+    mode = 'done';
+  } else if (mode === 'pinch' && pointers.size === 1) {
+    mode = 'pan';
+  }
+  if (pointers.size === 0) {
+    mode = 'none'; dragTarget = null; downInfo = null; panIndicator = null; pinch = null;
+    cv.style.cursor = ''; requestRender();
+  }
+}
+cv.addEventListener('pointerup', onUp);
+cv.addEventListener('pointercancel', onUp);
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (!game) return;
+  const k = e.deltaMode === 1 ? .05 : e.deltaMode === 2 ? 1 : .0015;
+  setScale(view.s * Math.exp(-e.deltaY * k), e.clientX, e.clientY);
+}, { passive: false });
+document.addEventListener('gesturestart', e => e.preventDefault());
+
+window.addEventListener('pointerdown', () => { if (hint) { hint = null; requestRender(); } }, true);
+
+/* ================= HUD / Таймер ================= */
+function fmtTime(ms) {
+  const t = Math.floor(ms / 1000), h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = t % 60;
+  return (h ? h + ':' : '') + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+}
+function updateHUD() {
+  if (!game) return;
+  $('#cnt').textContent = `${game.placed} / ${game.total}`;
+  $('#tmr').textContent = fmtTime((game.done ? game.endTime : performance.now()) - game.start);
+}
+setInterval(updateHUD, 500);
+
+function win() {
+  game.done = true; game.endTime = performance.now(); updateHUD();
+  $('#winTxt').textContent = `${game.total} кусочков за ${fmtTime(game.endTime - game.start)}`;
+  setTimeout(() => $('#win').classList.remove('hide'), 700);
+}
+$('#winClose').onclick = () => $('#win').classList.add('hide');
+$('#winNew').onclick = () => { $('#win').classList.add('hide'); newGameFromMenu(); };
+
+/* ================= Меню ================= */
+const menu = $('#menu');
+function closeMenu() { menu.classList.add('hide'); }
+function updateChecks() {
+  $('#ckGhost').textContent = showGhost ? '✓' : '';
+  $('#ckEdges').textContent = showEdges ? '✓' : '';
+  $('#ckJoin').textContent = joinNearby ? '✓' : '';
+}
+$('#menuBtn').onclick = e => { e.stopPropagation(); updateChecks(); menu.classList.toggle('hide'); };
+document.addEventListener('pointerdown', e => { if (!menu.contains(e.target) && e.target !== $('#menuBtn')) closeMenu(); });
+menu.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const act = b.dataset.act;
+  if (act === 'new') { closeMenu(); newGameFromMenu(); }
+  else if (act === 'upload') { closeMenu(); $('#file').click(); }
+  else if (act === 'join') { joinNearby = !joinNearby; updateChecks(); toast(joinNearby ? 'Склейка включена' : 'Склейка отключена'); }
+  else if (act === 'show') { closeMenu(); showPicture(); }
+  else if (act === 'ghost') { showGhost = !showGhost; updateChecks(); requestRender(); }
+  else if (act === 'edges') { showEdges = !showEdges; updateChecks(); requestRender(); }
+  else if (act === 'hint') { closeMenu(); hintPiece(); }
+  else if (act === 'fit') { closeMenu(); fitView(); }
+});
+
+function hintPiece() {
+  if (!game || !loose.length) { toast('Все кусочки уже на месте'); return; }
+  hint = pick(loose);
+  bringGroupToTop(hint.group);
+  const r = Math.max(hint.bw, hint.bh) / 2;
+  if (!inView(hint.x - r, hint.y - r) || !inView(hint.x + r, hint.y + r) || !inView(hint.cx, hint.cy)) fitView();
+  toast('Коснитесь экрана, чтобы убрать подсказку');
+  requestRender();
+}
+function showPicture() {
+  if (!game) return;
+  const pc = $('#picCv'), src = game.src;
+  pc.width = src.width; pc.height = src.height;
+  pc.getContext('2d').drawImage(src, 0, 0);
+  const k = Math.min(innerWidth * .94 / src.width, innerHeight * .86 / src.height);
+  pc.style.width = Math.round(src.width * k) + 'px'; pc.style.height = Math.round(src.height * k) + 'px';
+  $('#picOv').classList.remove('hide');
+}
+$('#picOv').addEventListener('pointerdown', e => { e.preventDefault(); $('#picOv').classList.add('hide'); });
+
+$('#zIn').onclick = () => setScale(view.s * 1.25, VW / 2, VH / 2);
+$('#zOut').onclick = () => setScale(view.s / 1.25, VW / 2, VH / 2);
+$('#zFit').onclick = () => fitView();
+
+/* ================= Диалог настроек ================= */
+let pending = null, dlgCuts = null, curStyle = 'tabs';
+const colsR = $('#colsR'), rowsR = $('#rowsR'), rotC = $('#rotC'), irrR = $('#irrR'), tabR = $('#tabR');
+
+function setCutStyle(style) {
+  curStyle = style;
+  if (style === 'tabs') {
+    $('#modeTabs').classList.add('active'); $('#modePoly').classList.remove('active');
+    $('#tabWrap').classList.remove('hide'); $('#polyWrap').classList.add('hide');
+  } else {
+    $('#modePoly').classList.add('active'); $('#modeTabs').classList.remove('active');
+    $('#polyWrap').classList.remove('hide'); $('#tabWrap').classList.add('hide');
+  }
+  regenCuts();
+}
+$('#modeTabs').onclick = () => setCutStyle('tabs');
+$('#modePoly').onclick = () => setCutStyle('poly');
+
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem('jigsawSettingsV2') || 'null');
+    if (s) {
+      colsR.value = s.cols; rowsR.value = s.rows; rotC.checked = s.rot;
+      irrR.value = s.irr || 70; tabR.value = s.tab || 32;
+      setCutStyle(s.style || 'tabs');
+      joinNearby = s.joinNearby ?? true;
+      return;
+    }
+  } catch (_) { }
+  const land = innerWidth >= innerHeight;
+  colsR.value = land ? 4 : 4; rowsR.value = land ? 4 : 4; rotC.checked = true;
+  irrR.value = 70; tabR.value = 32; setCutStyle('tabs');
+}
+function saveSettings() {
+  try {
+    localStorage.setItem('jigsawSettingsV2', JSON.stringify({
+      cols: +colsR.value, rows: +rowsR.value, rot: rotC.checked,
+      irr: +irrR.value, tab: +tabR.value, style: curStyle, joinNearby
+    }));
+  } catch (_) { }
+}
+function syncLabels() {
+  $('#colsV').textContent = colsR.value;
+  $('#rowsV').textContent = rowsR.value;
+  $('#totV').textContent = colsR.value * rowsR.value;
+  $('#irrV').textContent = irrR.value + '%';
+  $('#tabV').textContent = tabR.value + '%';
+}
+function regenCuts() {
+  const p = curStyle === 'tabs' ? +tabR.value / 100 : +irrR.value / 100;
+  dlgCuts = generateCuts(+colsR.value, +rowsR.value, curStyle, p);
+  drawPreview();
+}
+function drawPreview() {
+  if (!pending) return;
+  const pc = $('#prev'), box = $('#prevBox');
+  const bw = box.clientWidth || 320, bh = box.clientHeight || 200, img = pending.img;
+  const k = Math.min(bw / img.width, bh / img.height), w = Math.round(img.width * k), h = Math.round(img.height * k);
+  const d = Math.min(window.devicePixelRatio || 1, 2);
+  pc.width = w * d; pc.height = h * d; pc.style.width = w + 'px'; pc.style.height = h + 'px';
+  const g = pc.getContext('2d');
+  g.setTransform(d, 0, 0, d, 0, 0); g.imageSmoothingQuality = 'high';
+  g.drawImage(img, 0, 0, w, h);
+  if (dlgCuts) {
+    const p = edgesPath(dlgCuts, w / dlgCuts.cols, h / dlgCuts.rows);
+    g.lineJoin = 'round';
+    g.lineWidth = 2.5; g.strokeStyle = 'rgba(0,0,0,.55)'; g.stroke(p);
+    g.lineWidth = 1; g.strokeStyle = 'rgba(255,255,255,.95)'; g.stroke(p);
+  }
+}
+function openDialog(title, img, isUser) {
+  pending = { img, isUser };
+  $('#dlgTitle').textContent = title;
+  syncLabels();
+  $('#dlg').classList.remove('hide');
+  regenCuts();
+}
+function closeDialog() { $('#dlg').classList.add('hide'); pending = null; }
+function newGameFromMenu() {
+  if (game && game.isUser) openDialog('Новая игра', game.img, true);
+  else openDialog('Новая игра', makeRandomImage(), false);
+}
+[colsR, rowsR, irrR, tabR].forEach(el => el.addEventListener('input', () => { syncLabels(); regenCuts(); }));
+$('#rndBtn').onclick = () => { if (!pending) return; pending = { img: makeRandomImage(), isUser: false }; $('#dlgTitle').textContent = 'Новая игра'; drawPreview(); };
+$('#upBtn').onclick = () => $('#file').click();
+$('#cancelBtn').onclick = closeDialog;
+$('#startBtn').onclick = () => {
+  if (!pending) return;
+  const opts = { img: pending.img, isUser: pending.isUser, cols: +colsR.value, rows: +rowsR.value, rotation: rotC.checked, cuts: dlgCuts };
+  saveSettings();
+  closeDialog();
+  startGame(opts);
+};
+
+/* ================= Загрузка своей картинки ================= */
+function loadFile(f) {
+  if (!f || !f.type || !f.type.startsWith('image/')) { toast('Это не картинка'); return; }
+  const url = URL.createObjectURL(f), im = new Image();
+  im.onload = () => {
+    const iw = im.naturalWidth, ih = im.naturalHeight, k = Math.min(1, 2000 / Math.max(iw, ih));
+    const c = mkCanvas(iw * k, ih * k), g = c.getContext('2d');
+    g.imageSmoothingQuality = 'high'; g.drawImage(im, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(url);
+    closeMenu();
+    openDialog('Начать новую игру с этой картинкой?', c, true);
+  };
+  im.onerror = () => { URL.revokeObjectURL(url); toast('Не удалось загрузить картинку'); };
+  im.src = url;
+}
+$('#file').addEventListener('change', e => { const f = e.target.files[0]; if (f) loadFile(f); e.target.value = ''; });
+
+let dragDepth = 0;
+const hasFiles = e => e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files');
+window.addEventListener('dragenter', e => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth++; $('#dropOv').classList.remove('hide'); });
+window.addEventListener('dragover', e => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+window.addEventListener('dragleave', e => { if (!hasFiles(e)) return; dragDepth--; if (dragDepth <= 0) { dragDepth = 0; $('#dropOv').classList.add('hide'); } });
+window.addEventListener('drop', e => {
+  e.preventDefault(); dragDepth = 0; $('#dropOv').classList.add('hide');
+  const f = [...(e.dataTransfer.files || [])].find(f => f.type.startsWith('image/'));
+  if (f) loadFile(f); else toast('Перетащите файл изображения');
+});
+
+/* ================= Старт ================= */
+window.addEventListener('resize', () => { resize(); if (!$('#dlg').classList.contains('hide')) drawPreview(); });
+resize();
+loadSettings();
+const firstImg = makeRandomImage();
+const pInit = curStyle === 'tabs' ? +tabR.value / 100 : +irrR.value / 100;
+startGame({ img: firstImg, isUser: false, cols: +colsR.value, rows: +rowsR.value, rotation: rotC.checked, cuts: generateCuts(+colsR.value, +rowsR.value, curStyle, pInit) });
+openDialog('Новый пазл', firstImg, false);
+})();
+</script>
+</body>
+</html>
