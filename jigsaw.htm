@@ -216,37 +216,133 @@ function makeRandomImage() {
 }
 
 /* ================= Построение разрезов =================
-   1) Классические Jigsaw выступы/пазы:
-      Оригинальный алгоритм из версии Jigsaw без изменений (makeTabEdgePoints).
-   2) Ломаные линии (многоугольники):
-      Алгоритм из версии «Ломаные линии» с деформацией сетки и безопасными границами разрезов. */
+   1) Jigsaw выступы/пазы: наклонные разрезы, размер +-50%, деформация «пальцем» и проверка коллизий.
+   2) Ломаные линии (многоугольники). */
 
-function makeTabEdgePoints(A, B, sign, tabRatio) {
+function segmentsIntersect(p1, p2, q1, q2) {
+  const ccw = (a, b, c) => (c.y - a.y) * (b.x - a.x) - (b.y - a.y) * (c.x - a.x);
+  const d1 = ccw(p1, p2, q1), d2 = ccw(p1, p2, q2);
+  const d3 = ccw(q1, q2, p1), d4 = ccw(q1, q2, p2);
+  return (((d1 > 1e-7 && d2 < -1e-7) || (d1 < -1e-7 && d2 > 1e-7)) &&
+          ((d3 > 1e-7 && d4 < -1e-7) || (d3 < -1e-7 && d4 > 1e-7)));
+}
+
+function pointsEqual(p, q) {
+  return Math.abs(p.x - q.x) < 1e-5 && Math.abs(p.y - q.y) < 1e-5;
+}
+
+function hasSelfIntersection(pts) {
+  const n = pts.length;
+  for (let i = 0; i < n - 1; i++) {
+    const a1 = pts[i], a2 = pts[i + 1];
+    for (let j = i + 2; j < n - 1; j++) {
+      if (segmentsIntersect(a1, a2, pts[j], pts[j + 1])) return true;
+    }
+  }
+  return false;
+}
+
+function edgesIntersect(ptsA, ptsB) {
+  let minAx = Infinity, maxAx = -Infinity, minAy = Infinity, maxAy = -Infinity;
+  for (let i = 0; i < ptsA.length; i++) {
+    const p = ptsA[i];
+    if (p.x < minAx) minAx = p.x; if (p.x > maxAx) maxAx = p.x;
+    if (p.y < minAy) minAy = p.y; if (p.y > maxAy) maxAy = p.y;
+  }
+  let minBx = Infinity, maxBx = -Infinity, minBy = Infinity, maxBy = -Infinity;
+  for (let i = 0; i < ptsB.length; i++) {
+    const p = ptsB[i];
+    if (p.x < minBx) minBx = p.x; if (p.x > maxBx) maxBx = p.x;
+    if (p.y < minBy) minBy = p.y; if (p.y > maxBy) maxBy = p.y;
+  }
+  if (maxAx < minBx || minAx > maxBx || maxAy < minBy || minAy > maxBy) return false;
+
+  const na = ptsA.length - 1, nb = ptsB.length - 1;
+  for (let i = 0; i < na; i++) {
+    const a1 = ptsA[i], a2 = ptsA[i + 1];
+    for (let j = 0; j < nb; j++) {
+      const b1 = ptsB[j], b2 = ptsB[j + 1];
+      if (pointsEqual(a1, b1) || pointsEqual(a1, b2) || pointsEqual(a2, b1) || pointsEqual(a2, b2)) continue;
+      if (segmentsIntersect(a1, a2, b1, b2)) return true;
+    }
+  }
+  return false;
+}
+
+function isOutOfBounds(pts, cols, rows) {
+  const eps = 1e-4;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    if (p.x < -eps || p.x > cols + eps || p.y < -eps || p.y > rows + eps) return true;
+  }
+  return false;
+}
+
+function makeTabEdgePoints(A, B, sign, baseTabRatio) {
   const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy);
   const ux = dx / L, uy = dy / L;
   const nx = -uy * sign, ny = ux * sign;
   const pt = (s, h) => ({ x: A.x + ux * (s * L) + nx * (h * L), y: A.y + uy * (s * L) + ny * (h * L) });
 
-  const cubic = (p0, c1, c2, p1, steps = 5) => {
+// 2) Настраиваемый диапазон размера ушка
+  const minScale = 0.80; // 80%
+  const maxScale = 1.40; // 140%
+  const sizeScale = minScale + Math.random() * (maxScale - minScale);
+  const tabH = baseTabRatio * sizeScale;
+  const tabW = 0.32 * sizeScale;
+  const sc = 0.5 + (Math.random() * 2 - 1) * 0.04;
+  const sStart = sc - tabW * 0.5;
+  const sEnd = sc + tabW * 0.5;
+
+  // 3) Деформация «пальцем» вытянутая на случайный процент в 2 случайные стороны
+  const ang1 = Math.random() * Math.PI * 2;
+  const pct1 = 0.15 + Math.random() * 0.45; // процент вытяжения 1
+  const ds1 = Math.cos(ang1) * tabW * pct1 * 0.55;
+  const dh1 = Math.sin(ang1) * tabH * pct1 * 0.55;
+  const cs1 = sc + (Math.random() * 2 - 1) * tabW * 0.25;
+  const ch1 = tabH * (0.45 + Math.random() * 0.45);
+
+  const ang2 = Math.random() * Math.PI * 2;
+  const pct2 = 0.15 + Math.random() * 0.45; // процент вытяжения 2
+  const ds2 = Math.cos(ang2) * tabW * pct2 * 0.55;
+  const dh2 = Math.sin(ang2) * tabH * pct2 * 0.55;
+  const cs2 = sc + (Math.random() * 2 - 1) * tabW * 0.25;
+  const ch2 = tabH * (0.45 + Math.random() * 0.45);
+
+  const deform = (s, h, u) => {
+    const env = Math.pow(Math.sin(Math.PI * u), 1.25);
+    const d1 = Math.hypot((s - cs1) / (tabW * 0.65), (h - ch1) / (tabH * 0.65));
+    const falloff1 = Math.max(0, 1 - d1) ** 1.6;
+    const d2 = Math.hypot((s - cs2) / (tabW * 0.65), (h - ch2) / (tabH * 0.65));
+    const falloff2 = Math.max(0, 1 - d2) ** 1.6;
+
+    const ns = s + env * (ds1 * falloff1 + ds2 * falloff2);
+    const nh = Math.max(tabH * 0.03 * env, h + env * (dh1 * falloff1 + dh2 * falloff2));
+    return pt(ns, nh);
+  };
+
+  const cubic = (p0, c1, c2, p1, uStart, uEnd, steps = 6) => {
     const res = [];
     for (let i = 1; i <= steps; i++) {
       const t = i / steps, it = 1 - t;
       const s = it * it * it * p0.s + 3 * it * it * t * c1.s + 3 * it * t * t * c2.s + t * t * t * p1.s;
       const h = it * it * it * p0.h + 3 * it * it * t * c1.h + 3 * it * t * t * c2.h + t * t * t * p1.h;
-      res.push(pt(s, h));
+      const u = uStart + t * (uEnd - uStart);
+      res.push(deform(s, h, u));
     }
     return res;
   };
 
-  const pts = [pt(0, 0), pt(0.35, 0)];
-  // 1. Шейка (сужение к основанию)
-  pts.push(...cubic({ s: 0.35, h: 0 }, { s: 0.38, h: 0.05 * tabRatio }, { s: 0.35, h: 0.30 * tabRatio }, { s: 0.31, h: 0.42 * tabRatio }));
-  // 2. Головка (круглое ушко)
-  pts.push(...cubic({ s: 0.31, h: 0.42 * tabRatio }, { s: 0.24, h: 0.68 * tabRatio }, { s: 0.36, h: 1.05 * tabRatio }, { s: 0.50, h: 1.05 * tabRatio }));
-  // 3. Вторая половина головки
-  pts.push(...cubic({ s: 0.50, h: 1.05 * tabRatio }, { s: 0.64, h: 1.05 * tabRatio }, { s: 0.76, h: 0.68 * tabRatio }, { s: 0.69, h: 0.42 * tabRatio }));
-  // 4. Возврат к линии
-  pts.push(...cubic({ s: 0.69, h: 0.42 * tabRatio }, { s: 0.65, h: 0.30 * tabRatio }, { s: 0.62, h: 0.05 * tabRatio }, { s: 0.65, h: 0 }));
+  const pts = [pt(0, 0), pt(sStart, 0)];
+  const nw = tabW / 0.32;
+  const pNeckL = { s: sc - 0.19 * nw, h: 0.42 * tabH };
+  const pTop = { s: sc, h: 1.05 * tabH };
+  const pNeckR = { s: sc + 0.19 * nw, h: 0.42 * tabH };
+
+  pts.push(...cubic({ s: sStart, h: 0 }, { s: sStart + 0.03 * nw, h: 0.05 * tabH }, { s: sc - 0.15 * nw, h: 0.30 * tabH }, pNeckL, 0.0, 0.25));
+  pts.push(...cubic(pNeckL, { s: sc - 0.26 * nw, h: 0.68 * tabH }, { s: sc - 0.14 * nw, h: 1.05 * tabH }, pTop, 0.25, 0.50));
+  pts.push(...cubic(pTop, { s: sc + 0.14 * nw, h: 1.05 * tabH }, { s: sc + 0.26 * nw, h: 0.68 * tabH }, pNeckR, 0.50, 0.75));
+  pts.push(...cubic(pNeckR, { s: sc + 0.15 * nw, h: 0.30 * tabH }, { s: sEnd - 0.03 * nw, h: 0.05 * tabH }, { s: sEnd, h: 0 }, 0.75, 1.0));
   pts.push(pt(1, 0));
   return pts;
 }
@@ -255,34 +351,87 @@ function generateCuts(cols, rows, style = 'tabs', param = 0.30) {
   const H = [], V = [];
   if (style === 'tabs') {
     const tabRatio = param;
-    for (let r = 0; r <= rows; r++) {
-      H[r] = [];
-      for (let c = 0; c < cols; c++) {
-        const A = { x: c, y: r }, B = { x: c + 1, y: r };
-        if (r === 0 || r === rows) H[r][c] = [A, B];
-        else {
-          const sign = Math.random() < 0.5 ? 1 : -1;
-          H[r][c] = makeTabEdgePoints(A, B, sign, tabRatio);
+    let allValid = false;
+
+    // Цикл генерации со случайным перезапуском при глобальном тупике сетки
+    for (let restart = 0; restart < 40 && !allValid; restart++) {
+      const P = [];
+      const maxJitter = 0.18; // 1) Случайный угол воображаемой линии за счет смещения узлов
+
+      for (let r = 0; r <= rows; r++) {
+        P[r] = [];
+        for (let c = 0; c <= cols; c++) {
+          let px = c, py = r;
+          if (c > 0 && c < cols) px += (Math.random() * 2 - 1) * maxJitter;
+          if (r > 0 && r < rows) py += (Math.random() * 2 - 1) * maxJitter;
+          P[r][c] = { x: px, y: py };
         }
       }
-    }
-    for (let r = 0; r < rows; r++) {
-      V[r] = [];
-      for (let c = 0; c <= cols; c++) {
-        const A = { x: c, y: r }, B = { x: c, y: r + 1 };
-        if (c === 0 || c === cols) V[r][c] = [A, B];
-        else {
-          const sign = Math.random() < 0.5 ? 1 : -1;
-          V[r][c] = makeTabEdgePoints(A, B, sign, tabRatio);
+
+      const placedEdges = [];
+      let failure = false;
+
+      // Горизонтальные разрезы
+      for (let r = 0; r <= rows && !failure; r++) {
+        H[r] = [];
+        for (let c = 0; c < cols && !failure; c++) {
+          const A = P[r][c], B = P[r][c + 1];
+          if (r === 0 || r === rows) {
+            H[r][c] = [{ x: A.x, y: A.y }, { x: B.x, y: B.y }];
+          } else {
+            let edge = null, edgeOk = false;
+            // 4) Перегенерация проблемного стыка при пересечении
+            for (let tr = 0; tr < 70 && !edgeOk; tr++) {
+              const sign = Math.random() < 0.5 ? 1 : -1;
+              edge = makeTabEdgePoints(A, B, sign, tabRatio);
+              if (hasSelfIntersection(edge) || isOutOfBounds(edge, cols, rows)) continue;
+              let collides = false;
+              for (let k = 0; k < placedEdges.length; k++) {
+                if (edgesIntersect(edge, placedEdges[k])) { collides = true; break; }
+              }
+              if (!collides) edgeOk = true;
+            }
+            if (!edgeOk) { failure = true; break; }
+            H[r][c] = edge;
+            placedEdges.push(edge);
+          }
         }
       }
+
+      // Вертикальные разрезы
+      for (let r = 0; r < rows && !failure; r++) {
+        V[r] = [];
+        for (let c = 0; c <= cols && !failure; c++) {
+          const A = P[r][c], B = P[r + 1][c];
+          if (c === 0 || c === cols) {
+            V[r][c] = [{ x: A.x, y: A.y }, { x: B.x, y: B.y }];
+          } else {
+            let edge = null, edgeOk = false;
+            // 4) Перегенерация проблемного стыка при пересечении
+            for (let tr = 0; tr < 70 && !edgeOk; tr++) {
+              const sign = Math.random() < 0.5 ? 1 : -1;
+              edge = makeTabEdgePoints(A, B, sign, tabRatio);
+              if (hasSelfIntersection(edge) || isOutOfBounds(edge, cols, rows)) continue;
+              let collides = false;
+              for (let k = 0; k < placedEdges.length; k++) {
+                if (edgesIntersect(edge, placedEdges[k])) { collides = true; break; }
+              }
+              if (!collides) edgeOk = true;
+            }
+            if (!edgeOk) { failure = true; break; }
+            V[r][c] = edge;
+            placedEdges.push(edge);
+          }
+        }
+      }
+
+      if (!failure) allValid = true;
     }
   } else {
-    // Алгоритм нарезки "Ломаные линии" из соответствующего вложения
+    // Режим "Многоугольники"
     const irr = param;
     const P = [];
 
-    // 1. Узлы сетки со случайным смещением (внутренние смещаются, края строго прямые)
     for (let r = 0; r <= rows; r++) {
       P[r] = [];
       for (let c = 0; c <= cols; c++) {
@@ -298,7 +447,6 @@ function generateCuts(cols, rows, style = 'tabs', param = 0.30) {
       }
     }
 
-    // 2. Горизонтальные ребра
     for (let r = 0; r <= rows; r++) {
       H[r] = [];
       for (let c = 0; c < cols; c++) {
@@ -321,7 +469,6 @@ function generateCuts(cols, rows, style = 'tabs', param = 0.30) {
       }
     }
 
-    // 3. Вертикальные ребра
     for (let r = 0; r < rows; r++) {
       V[r] = [];
       for (let c = 0; c <= cols; c++) {
