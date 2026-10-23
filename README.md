@@ -14,8 +14,6 @@
 
 [Сгенерировать ротационный план](rot.htm)
 
-[Старая телеигра](tvgame.htm)
-
 [Запустить html без создания файла](run.htm)
 
 [TOTP / Google Authenticator](totp.htm)
@@ -25,4 +23,8 @@
 [git diff с допущениями](diff.htm)
 
 [Убрать-приклеить время к субтитрам](ass-subtitles.htm)
+
+[Старая телеигра](tvgame.htm)
+
+[Паззл Jigsaw](jigsaw.htm)
 
