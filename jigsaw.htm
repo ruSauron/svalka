@@ -1136,7 +1136,7 @@ function loadSettings() {
     }
   } catch (_) { }
   const land = innerWidth >= innerHeight;
-  colsR.value = land ? 4 : 4; rowsR.value = land ? 4 : 4; rotC.checked = true;
+  colsR.value = land ? 4 : 4; rowsR.value = land ? 4 : 4; rotC.checked = false;
   irrR.value = 70; tabR.value = 32; setCutStyle('tabs');
 }
 function saveSettings() {
